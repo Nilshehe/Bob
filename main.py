@@ -6,6 +6,8 @@ from funktioner.response_cleaner import get_last_text
 from funktioner.formater import formater
 from langgraph.types import Command
 from typing import Any
+from voice.live_stt import stt_main
+from voice.wake_word import wait_for_wake_word
 
 #memory
 from langgraph.checkpoint.memory import InMemorySaver
@@ -17,36 +19,16 @@ llm = ChatOllama(model = "Qwen3:4b", reasoning = True)
 #tools
 from tools.ddgs_tool import web_search
 from tools.sok_visible import search_visible_webpage, download_file, move_file, get_clickable_elements, click_on_page, type_into_page, scroll_page, click_and_download, get_page_text
-from tools.model3d_tools import create_3d_model, combine_3d_models, lookup_reference_shape, add_reference_shape, download_reference_shape, create_case_shell, create_bracket, create_flat_plate, add_mounting_holes, render_model_views, generate_shape_report, create_html_viewer, list_materials, add_material, download_material, test_durability, simulate_drop_test, estimate_fatigue_life, compare_materials_durability
-tools = [web_search, 
+tools = [web_search,
         search_visible_webpage, 
         download_file, 
         move_file, 
-        get_clickable_elements, 
+        get_clickable_elements,
         click_on_page, 
         type_into_page, 
         scroll_page, 
         click_and_download, 
         get_page_text,
-#        create_3d_model,
-#        combine_3d_models,
-#        lookup_reference_shape,
-#        add_reference_shape,
-#        download_reference_shape,
-#        create_case_shell,
-#        create_bracket,
-#        create_flat_plate,
-#        add_mounting_holes,
-#        render_model_views,
-#        generate_shape_report,
-#        create_html_viewer,
-#        list_materials,
-#        add_material,
-#        download_material,
-#        test_durability,
-#        simulate_drop_test,
-#        estimate_fatigue_life,
-#        compare_materials_durability
 ]
 
 
@@ -159,14 +141,28 @@ def resume_after_interrupt(agent, config, decision):
 
 
 def chatloop():
-    while True:
-        user_input = input("\nask me anything: ")
-        for token_data, block in main(user_input, "user123"):
-            response, node_type = get_last_text(token_data, block)
-            if node_type == "interrupt":
-                interupt_identifier(block)
-            else:
-                formater(response, node_type)
+    if input("voice mode? (y/n): ").strip().lower() == "y":
+        while True:
+            print("Waiting for wake word...")
+            wait_for_wake_word()
+            print("Wake word detected. Listening for command...")
+            user_input = stt_main()
+            print(f"User input: {user_input}") 
+            for token_data, block in main(user_input, "user123"):
+                response, node_type = get_last_text(token_data, block)
+                if node_type == "interrupt":
+                    interupt_identifier(block)
+                else:
+                    formater(response, node_type)
+    else:
+        while True:
+            user_input = input("\nask me anything: ")
+            for token_data, block in main(user_input, "user123"):
+                response, node_type = get_last_text(token_data, block)
+                if node_type == "interrupt":
+                    interupt_identifier(block)
+                else:
+                    formater(response, node_type)
 
 if __name__ == "__main__":
     chatloop()
