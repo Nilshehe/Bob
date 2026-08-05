@@ -37,7 +37,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
 
 #llm
-llm = ChatOllama(model = "Qwen3:1.7b", reasoning = True)
+llm = ChatOllama(model = "Qwen3:4b", reasoning = True)
 
 #tools
 from tools.ddgs_tool import web_search
