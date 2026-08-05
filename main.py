@@ -24,7 +24,7 @@ def process_pending_notifications():
     """Anropa i toppen av while-loopen i chatloop(), innan input()."""
     while not _notifications.empty():
         job_id, result = _notifications.get_nowait()
-        for token_data, block in main(f"async job with job id {job_id} is finished", "user123"):
+        for token_data, block in main(f"THIS IS A AUTIOMATIC MESSAGE: async job with job id {job_id} is finished", "user123"):
             response, node_type = get_last_text(token_data, block)
             if node_type == "interrupt":
                 interupt_identifier(block)
@@ -43,6 +43,7 @@ llm = ChatOllama(model = "Qwen3:4b", reasoning = True)
 from tools.ddgs_tool import web_search
 from tools.sok_visible import search_visible_webpage, download_file, move_file, get_clickable_elements, click_on_page, type_into_page, scroll_page, click_and_download, get_page_text, open_browser
 from tools.code_ai import code_ai, code_ai_status
+from tools.skills_tools import list_skills, read_skill, create_skill
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -55,11 +56,15 @@ tools = [web_search,
         get_page_text,
         open_browser,
         code_ai,
-        code_ai_status
+        code_ai_status,
+        list_skills,
+        read_skill,
+        create_skill
 ]
 
 
-system_prompt = """You are a helpful assistant"""
+system_prompt = """You are a helpful assistant. Allways check if there are anny awailable skills that can help you with the task. If there are, use them. If not, try to solve the task yourself.
+If you need to use a skill, first call list_skills() to see if there is a skill that can help you. If there is, call read_skill() to get the full content of the skill and use it to solve the task. If there is no skill that can help you, try to solve the task yourself."""
 
 #config
 config = {"configurable": {"thread_id": "some_id"}}
@@ -73,7 +78,8 @@ def make_agent() -> Any:
                 "download_file": True,
                 "move_file": True,
                 "click_and_download": True,
-                "code_ai": True
+                "code_ai": True,
+                "create_skill": True
 
             })
         ],
