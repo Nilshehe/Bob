@@ -21,7 +21,7 @@ DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
  
  
 def _safe_path(relative_path: str) -> Path:
-    """Slår ihop relative_path med AI_FOLDER och blockerar utbrytning (../, absoluta paths)."""
+    """Join `relative_path` with `AI_FOLDER` and block directory traversal (../ or absolute paths)."""
     candidate = (AI_FOLDER / relative_path).resolve()
     if AI_FOLDER not in candidate.parents and candidate != AI_FOLDER:
         raise ValueError(
@@ -79,7 +79,7 @@ class _BrowserWorker:
             self._ready.set()
  
     def call(self, fn: Callable[..., Any], *args, **kwargs) -> Any:
-        """Kör fn(page, *args, **kwargs) inne i browser-tråden och blockerar tills svar finns."""
+        """Run `fn(page, *args, **kwargs)` inside the browser thread and block until a result is available."""
         result_q: "queue.Queue[tuple]" = queue.Queue(maxsize=1)
         self._cmd_q.put((fn, args, kwargs, result_q))
         status, value = result_q.get()
@@ -103,11 +103,18 @@ class _BrowserWorker:
  
  
 def close_browser():
-    """Stäng ner browser-sessionen helt (anropa vid programslut om du vill städa upp)."""
+    """Shut down the browser session completely (call on program exit to clean up)."""
     with _BrowserWorker._instance_lock:
         inst = _BrowserWorker._instance
     if inst:
         inst.shutdown()
+ 
+ 
+@tool
+def open_browser() -> str:
+    """Start the visible browser session if it's not already running. Call this before using other browser tools."""
+    _BrowserWorker.instance()
+    return "Browser started and ready."
  
  
 # ---------------------------------------------------------------------------
@@ -162,14 +169,15 @@ def _search_visible_webpage_impl(page: Page, url: str, query: str, max_matches: 
  
 @tool
 def search_visible_webpage(url: str, query: str, max_matches: int = 5) -> str:
-    """Öppnar url i ett synligt browserfönster på skärmen och söker efter query i sidans text.
-    Returnerar de textstycken (med lite kontext runt) där query förekommer.
-    Använd detta när användaren ska kunna se vad AI:n bläddrar/söker efter live.
- 
+    """Open `url` in a visible browser window and search the page text for `query`.
+
+    Returns the passages (with surrounding context) where `query` appears.
+    Use this when the user should be able to watch what the AI is browsing/searching live.
+
     Args:
-        url: Sidan som ska öppnas, t.ex. "https://example.com"
-        query: Text/fras att leta efter på sidan (skiftlägesokänsligt)
-        max_matches: Max antal träffar att returnera (default 5)
+        url: The page to open, e.g. "https://example.com"
+        query: Text/phrase to search for on the page (case-insensitive)
+        max_matches: Maximum number of matches to return (default 5)
     """
     return _BrowserWorker.instance().call(_search_visible_webpage_impl, url, query, max_matches)
  
@@ -179,11 +187,11 @@ def search_visible_webpage(url: str, query: str, max_matches: int = 5) -> str:
 # ---------------------------------------------------------------------------
 @tool
 def download_file(url: str, filename: Optional[str] = None) -> str:
-    """Laddar ner en fil från url till AI:ns egen nedladdningsmapp (ai_workspace/downloads).
- 
+    """Download a file from `url` into the agent's download folder (ai_workspace/downloads).
+
     Args:
-        url: Direktlänk till filen som ska laddas ner
-        filename: Valfritt filnamn att spara som. Om utelämnat gissas det från url.
+        url: Direct link to the file to download
+        filename: Optional filename to save as. If omitted, the name is guessed from the URL.
     """
     if not filename:
         parsed = urlparse(url)
@@ -212,14 +220,15 @@ def download_file(url: str, filename: Optional[str] = None) -> str:
 # ---------------------------------------------------------------------------
 @tool
 def move_file(source: str, destination: str) -> str:
-    """Flyttar/byter namn på en fil inom AI:ns egen sandlådemapp (ai_workspace).
-    Både source och destination är sökvägar relativa till ai_workspace, t.ex.
-    source="downloads/rapport.pdf", destination="klara/rapport_2026.pdf".
-    Kan INTE flytta filer utanför ai_workspace.
- 
+    """Move/rename a file within the agent's sandbox folder (ai_workspace).
+
+    Both `source` and `destination` are paths relative to `ai_workspace`, e.g.
+    `source="downloads/report.pdf"`, `destination="done/report_2026.pdf"`.
+    This cannot move files outside of `ai_workspace`.
+
     Args:
-        source: Relativ sökväg till filen som ska flyttas
-        destination: Relativ sökväg dit filen ska flyttas (mapp skapas vid behov)
+        source: Relative path to the file to move
+        destination: Relative path to move the file to (parent directories are created as needed)
     """
     try:
         src_path = _safe_path(source)
@@ -270,12 +279,13 @@ def _get_clickable_elements_impl(page: Page, max_items: int) -> str:
  
 @tool
 def get_clickable_elements(max_items: int = 40) -> str:
-    """Listar klickbara/skrivbara element på nuvarande sida (länkar, knappar, inputs)
-    med index, synlig text och en CSS-selektor du kan använda i click_on_page /
-    type_into_page. Använd detta INNAN du klickar/skriver för att hitta rätt element.
- 
+    """List clickable/editable elements on the current page (links, buttons, inputs).
+
+    Returns index, visible text and a CSS selector that can be used with `click_on_page`/
+    `type_into_page`. Call this BEFORE clicking/typing to locate the correct element.
+
     Args:
-        max_items: Max antal element att lista (default 40)
+        max_items: Maximum number of elements to list (default 40)
     """
     return _BrowserWorker.instance().call(_get_clickable_elements_impl, max_items)
  
@@ -297,12 +307,12 @@ def _click_on_page_impl(page: Page, selector: str, use_text: bool) -> str:
  
 @tool
 def click_on_page(selector: str, use_text: bool = False) -> str:
-    """Klickar på ett element på den aktuella sidan.
- 
+    """Click an element on the current page.
+
     Args:
-        selector: CSS-selektor (t.ex. "#submit-btn", "button.buy") ELLER synlig
-                  text om use_text=True (t.ex. "Ladda ner")
-        use_text: Om True tolkas selector som synlig text att klicka på istället för CSS
+        selector: CSS selector (e.g. "#submit-btn", "button.buy") OR visible
+                  text if `use_text=True` (e.g. "Download")
+        use_text: If True, `selector` is interpreted as visible text to click instead of CSS
     """
     return _BrowserWorker.instance().call(_click_on_page_impl, selector, use_text)
  
@@ -326,13 +336,13 @@ def _type_into_page_impl(page: Page, selector: str, text: str, press_enter: bool
  
 @tool
 def type_into_page(selector: str, text: str, press_enter: bool = False, clear_first: bool = True) -> str:
-    """Skriver text i ett input-/textarea-fält på sidan.
- 
+    """Type text into an input/textarea field on the page.
+
     Args:
-        selector: CSS-selektor för fältet (t.ex. "input[name='q']")
-        text: Texten som ska skrivas
-        press_enter: Om True trycks Enter efter texten (t.ex. för sökrutor)
-        clear_first: Om True töms fältet innan texten skrivs
+        selector: CSS selector for the field (e.g. "input[name='q']")
+        text: The text to type
+        press_enter: If True, press Enter after typing (e.g. for search boxes)
+        clear_first: If True, clear the field before typing
     """
     return _BrowserWorker.instance().call(_type_into_page_impl, selector, text, press_enter, clear_first)
  
@@ -360,11 +370,11 @@ def _scroll_page_impl(page: Page, direction: str, amount_px: int) -> str:
  
 @tool
 def scroll_page(direction: str = "down", amount_px: int = 800) -> str:
-    """Scrollar sidan upp eller ner, eller till toppen/botten.
- 
+    """Scroll the page up or down, or jump to top/bottom.
+
     Args:
-        direction: "down", "up", "top" eller "bottom"
-        amount_px: Antal pixlar att scrolla vid "down"/"up" (default 800)
+        direction: "down", "up", "top" or "bottom"
+        amount_px: Number of pixels to scroll for "down"/"up" (default 800)
     """
     return _BrowserWorker.instance().call(_scroll_page_impl, direction, amount_px)
  
@@ -394,13 +404,13 @@ def _click_and_download_impl(page: Page, selector: str, use_text: bool, filename
  
 @tool
 def click_and_download(selector: str, use_text: bool = False, filename: Optional[str] = None) -> str:
-    """Klickar på ett element (t.ex. en "Ladda ner"-länk/knapp) som startar en
-    filnedladdning i webbläsaren, och sparar filen i ai_workspace/downloads.
- 
+    """Click an element (e.g. a "Download" link/button) that triggers a
+    browser download and save the file to ai_workspace/downloads.
+
     Args:
-        selector: CSS-selektor eller synlig text på det klickbara elementet
-        use_text: Om True tolkas selector som synlig text istället för CSS
-        filename: Valfritt filnamn att spara som. Annars används webbläsarens föreslagna namn.
+        selector: CSS selector or visible text of the clickable element
+        use_text: If True, `selector` is interpreted as visible text instead of CSS
+        filename: Optional filename to save as. Otherwise the browser's suggested name is used.
     """
     return _BrowserWorker.instance().call(_click_and_download_impl, selector, use_text, filename)
 
@@ -430,10 +440,10 @@ def _get_page_text_impl(page: Page) -> str:
 
 @tool
 def get_page_text() -> str:
-    """Hämtar all synlig text från den aktuella webbsidan.
+    """Retrieve all visible text from the current web page.
 
-    Returnerar:
-        All synlig text (document.body.innerText).
+    Returns:
+        All visible text (document.body.innerText).
     """
     return _BrowserWorker.instance().call(_get_page_text_impl)
  

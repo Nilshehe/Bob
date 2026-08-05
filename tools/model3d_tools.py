@@ -1,35 +1,34 @@
 """
 model3d_tools.py
 =================
-LangChain-verktyg som ger en AI-agent förmåga att:
-  1. Skapa 3D-modeller (primitiver + booleska kombinationer) och exportera STL/OBJ
-  2. Testa modellernas hållfasthet ("tålighet") under last, med olika material
-  3. Simulera olika miljöer (temperatur, fukt, korrosion) som påverkar materialets
-     effektiva hållfasthet
-  4. Ladda ner / lägga till nya material i den lokala materialdatabasen (JSON),
-     så nya material kan tillkomma i framtiden utan kodändring
+LangChain tools that give an AI agent the ability to:
+    1. Create 3D models (primitives + boolean combinations) and export STL/OBJ
+    2. Test model durability under load with different materials
+    3. Simulate environmental effects (temperature, humidity, corrosion) that
+         affect effective material strength
+    4. Download / add new materials to the local material database (JSON), so
+         new materials can be added in the future without changing code
 
-Beroenden:
-    pip install --break-system-packages langchain langchain-core trimesh numpy requests \
-        matplotlib shapely rtree manifold3d
+Dependencies:
+        pip install --break-system-packages langchain langchain-core trimesh numpy requests \
+                matplotlib shapely rtree manifold3d
 
-Designval / begränsningar:
-    - Ingen tung FEA-motor (t.ex. FEniCS/CalculiX) används. Istället görs en
-      "FEA-lite"-beräkning baserad på klassisk balkteori (Euler-Bernoulli) för
-      spänning och nedböjning. Det ger snabba, deterministiska, "good enough"-
-      resultat för konceptuell hållfasthetstestning utan tunga externa beroenden
-      eller nätverksåtkomst till en riktig solver.
-    - Materialdatabasen är en lokal JSON-fil som går att utöka via
-      `download_material` (hämtar JSON från valfri URL) eller `add_material`
-      (manuell inmatning). Detta gör "ladda ner nya material i framtiden" möjligt
-      utan att hårdkoda en specifik extern tjänst.
-    - Geometri hanteras med `trimesh`. Modeller sparas som riktiga filer på disk
-      så att agenten (eller användaren) kan öppna dem i valfri 3D-mjukvara.
+Design choices / limitations:
+        - No heavy FEA engine (e.g. FEniCS/CalculiX) is used. Instead a lightweight
+            Euler-Bernoulli beam approximation is employed for bending and deflection.
+            This yields fast, deterministic, "good-enough" results for conceptual
+            durability testing without heavy external dependencies or a solver.
+        - The material database is a local JSON file extendable via
+            `download_material` (fetch JSON from any URL) or `add_material`
+            (manual entry). This allows adding materials later without hardcoding
+            an external service.
+        - Geometry is handled with `trimesh`. Models are saved to disk so the agent
+            or user can open them in any 3D software.
 
-Användning i en LangChain-agent:
-    from model3d_tools import get_tools
-    tools = get_tools()  # lista med @tool-dekorerade funktioner
-    agent = create_react_agent(llm, tools, ...)  # eller annan agent-typ
+Usage in a LangChain agent:
+        from model3d_tools import get_tools
+        tools = get_tools()  # list of @tool-decorated functions
+        agent = create_react_agent(llm, tools, ...)  # or another agent type
 """
 
 from __future__ import annotations
@@ -204,16 +203,16 @@ def _save_reference_shapes(shapes: dict) -> None:
 
 
 class LookupReferenceInput(BaseModel):
-    query: str = Field(default="", description="Fritextsökning i namn/kategori/notes, tomt = visa alla")
+    query: str = Field(default="", description="Free-text search in name/category/notes, empty = show all")
 
 
 @tool("lookup_reference_shape", args_schema=LookupReferenceInput)
 def lookup_reference_shape(query: str = "") -> str:
-    """Slå upp kända produktmått i den lokala referensdatabasen (t.ex.
-    'galaxy_buds3_pro_case'). Använd detta INNAN du designar ett skal/case,
-    så innermåtten stämmer med det riktiga föremålet. Om produkten inte finns
-    här: sök upp officiella mått på webben och lägg till dem med
-    add_reference_shape eller download_reference_shape."""
+    """Look up known product dimensions in the local reference database
+    (e.g. 'galaxy_buds3_pro_case'). Use this BEFORE designing a case/shell so
+    inner dimensions match the real object. If the product is not present,
+    find official dimensions online and add them with add_reference_shape or
+    download_reference_shape."""
     shapes = _load_reference_shapes()
     q = query.lower().strip()
     if not q:
@@ -227,14 +226,14 @@ def lookup_reference_shape(query: str = "") -> str:
 
 
 class AddReferenceShapeInput(BaseModel):
-    name: str = Field(description="Nyckel, t.ex. 'iphone_16_pro' eller 'galaxy_buds3_case'")
-    category: str = Field(description="T.ex. 'earbuds_case', 'phone', 'controller'")
-    outer_width_mm: float = Field(description="Yttermått bredd (mm)")
-    outer_height_mm: float = Field(description="Yttermått höjd (mm)")
-    outer_depth_mm: float = Field(description="Yttermått djup/tjocklek (mm)")
-    shape: str = Field(default="rounded_rectangular_prism", description="Grundform")
-    corner_radius_mm: float = Field(default=3.0, description="Uppskattad hörnradie (mm)")
-    notes: str = Field(default="", description="Källa/anteckningar")
+    name: str = Field(description="Key, e.g. 'iphone_16_pro' or 'galaxy_buds3_case'")
+    category: str = Field(description="E.g. 'earbuds_case', 'phone', 'controller'")
+    outer_width_mm: float = Field(description="Outer width in mm")
+    outer_height_mm: float = Field(description="Outer height in mm")
+    outer_depth_mm: float = Field(description="Outer depth/thickness in mm")
+    shape: str = Field(default="rounded_rectangular_prism", description="Base shape")
+    corner_radius_mm: float = Field(default=3.0, description="Estimated corner radius in mm")
+    notes: str = Field(default="", description="Source/notes")
 
 
 @tool("add_reference_shape", args_schema=AddReferenceShapeInput)
@@ -242,8 +241,8 @@ def add_reference_shape(name: str, category: str, outer_width_mm: float,
                          outer_height_mm: float, outer_depth_mm: float,
                          shape: str = "rounded_rectangular_prism",
                          corner_radius_mm: float = 3.0, notes: str = "") -> str:
-    """Lägg till kända produktmått manuellt (t.ex. efter en websökning) i
-    referensdatabasen, så de kan återanvändas för att designa skal/case."""
+    """Add known product dimensions manually (e.g. after a web search) to
+    the reference database so they can be reused when designing cases/shells."""
     shapes = _load_reference_shapes()
     shapes[name.lower().strip()] = {
         "category": category, "outer_width_mm": outer_width_mm,
@@ -255,13 +254,13 @@ def add_reference_shape(name: str, category: str, outer_width_mm: float,
 
 
 class DownloadReferenceShapeInput(BaseModel):
-    url: str = Field(description="URL till JSON med ett eller flera referensmått, samma format som databasen")
+    url: str = Field(description="URL to JSON containing one or more reference shapes, same format as the database")
 
 
 @tool("download_reference_shape", args_schema=DownloadReferenceShapeInput)
 def download_reference_shape(url: str) -> str:
-    """Hämta referensmått för produkter från en URL (JSON) och lägg till dem
-    lokalt, så nya produktformer kan tillkomma i framtiden."""
+    """Fetch product reference dimensions from a URL (JSON) and add them
+    locally so new product shapes can be added in the future."""
     import requests
     try:
         resp = requests.get(url, timeout=15)
@@ -361,28 +360,28 @@ def _geometry_report(mesh: "trimesh.Trimesh", material_key: Optional[str] = None
 # --------------------------------------------------------------------------- #
 
 class CreateModelInput(BaseModel):
-    shape: str = Field(description="Form: 'box', 'cylinder', 'sphere', eller 'cone'")
+    shape: str = Field(description="Shape: 'box', 'cylinder', 'sphere', or 'cone'")
     dimensions: dict = Field(
         description=(
-            "Mått i meter. box: {'x','y','z'}. cylinder/cone: {'radius','height'}. "
+            "Dimensions in meters. box: {'x','y','z'}. cylinder/cone: {'radius','height'}. "
             "sphere: {'radius'}."
         )
     )
-    name: Optional[str] = Field(default=None, description="Valfritt filnamn (utan filändelse)")
-    export_format: str = Field(default="stl", description="'stl' eller 'obj'")
+    name: Optional[str] = Field(default=None, description="Optional filename (without extension)")
+    export_format: str = Field(default="stl", description="'stl' or 'obj'")
     material: Optional[str] = Field(
         default=None,
-        description="Valfri materialnyckel (se list_materials) för att räkna ut massa direkt.",
+        description="Optional material key (see list_materials) to compute mass directly.",
     )
 
 
 @tool("create_3d_model", args_schema=CreateModelInput)
 def create_3d_model(shape: str, dimensions: dict, name: Optional[str] = None,
                      export_format: str = "stl", material: Optional[str] = None) -> str:
-    """Skapa en enkel 3D-modell (box, cylinder, sphere, cone) och spara den som
-    STL eller OBJ. Returnerar en utförlig geometrirapport (volym, yta,
-    bounding box, tyngdpunkt, tröghetsmoment, konvexitet, ev. massa om
-    material anges) som kan användas direkt i vidare hållfasthetstester."""
+    """Create a simple 3D model (box, cylinder, sphere, cone) and save it as
+    STL or OBJ. Returns a detailed geometry report (volume, area,
+    bounding box, center of mass, moment of inertia, convexity, and mass if
+    material is provided) suitable for further durability tests."""
     shape = shape.lower().strip()
     d = dimensions
 
@@ -410,19 +409,18 @@ def create_3d_model(shape: str, dimensions: dict, name: Optional[str] = None,
 
 
 class CombineModelsInput(BaseModel):
-    file_path_a: str = Field(description="Sökväg till första modellen (STL/OBJ)")
-    file_path_b: str = Field(description="Sökväg till andra modellen (STL/OBJ)")
-    operation: str = Field(description="'union', 'difference' eller 'intersection'")
-    name: Optional[str] = Field(default=None, description="Valfritt filnamn för resultatet")
+    file_path_a: str = Field(description="Path to the first model (STL/OBJ)")
+    file_path_b: str = Field(description="Path to the second model (STL/OBJ)")
+    operation: str = Field(description="'union', 'difference' or 'intersection'")
+    name: Optional[str] = Field(default=None, description="Optional filename for the result")
 
 
 @tool("combine_3d_models", args_schema=CombineModelsInput)
 def combine_3d_models(file_path_a: str, file_path_b: str, operation: str,
                        name: Optional[str] = None) -> str:
-    """Kombinera två existerande 3D-modeller med en boolesk operation
-    (union/difference/intersection). Kräver att 'blender' eller 'manifold3d'
-    finns installerat som bakomliggande boolean-motor för trimesh; annars
-    returneras ett tydligt felmeddelande."""
+    """Combine two existing 3D models with a boolean operation
+    (union/difference/intersection). Requires 'blender' or 'manifold3d' to be
+    installed as a boolean engine for trimesh; otherwise a clear error is returned."""
     a = trimesh.load(file_path_a, force="mesh")
     b = trimesh.load(file_path_b, force="mesh")
 
@@ -452,27 +450,27 @@ def combine_3d_models(file_path_a: str, file_path_b: str, operation: str,
 
 @tool("list_materials")
 def list_materials() -> str:
-    """Lista alla material som finns i den lokala materialdatabasen, med
-    grundläggande egenskaper (densitet, E-modul, sträckgräns)."""
+    """List all materials in the local material database with basic
+    properties (density, Young's modulus, yield strength)."""
     mats = _load_materials()
     return json.dumps(mats, indent=2, ensure_ascii=False)
 
 
 class AddMaterialInput(BaseModel):
-    name: str = Field(description="Materialets namn/nyckel, t.ex. 'carbon_fiber'")
-    density: float = Field(description="Densitet i kg/m^3")
-    young_modulus_pa: float = Field(description="Elasticitetsmodul (E) i Pascal")
-    yield_strength_pa: float = Field(description="Sträckgräns i Pascal")
-    poisson_ratio: float = Field(default=0.3, description="Poissons tal")
-    notes: str = Field(default="", description="Fritext-anteckning om materialet")
+    name: str = Field(description="Material name/key, e.g. 'carbon_fiber'")
+    density: float = Field(description="Density in kg/m^3")
+    young_modulus_pa: float = Field(description="Young's modulus (E) in Pascal")
+    yield_strength_pa: float = Field(description="Yield strength in Pascal")
+    poisson_ratio: float = Field(default=0.3, description="Poisson's ratio")
+    notes: str = Field(default="", description="Free-text notes about the material")
 
 
 @tool("add_material", args_schema=AddMaterialInput)
 def add_material(name: str, density: float, young_modulus_pa: float,
                   yield_strength_pa: float, poisson_ratio: float = 0.3,
                   notes: str = "") -> str:
-    """Lägg till (eller uppdatera) ett material manuellt i den lokala
-    materialdatabasen, så det kan användas i framtida hållfasthetstester."""
+    """Add (or update) a material manually to the local material database
+    so it can be used in future durability tests."""
     mats = _load_materials()
     mats[name.lower().strip()] = {
         "density": density, "young_modulus_pa": young_modulus_pa,
@@ -486,19 +484,18 @@ def add_material(name: str, density: float, young_modulus_pa: float,
 class DownloadMaterialInput(BaseModel):
     url: str = Field(
         description=(
-            "URL till en JSON-resurs. Förväntat format: antingen ett enda "
-            "materialobjekt {'name':..., 'density':..., 'young_modulus_pa':..., "
-            "'yield_strength_pa':...} eller en dict av flera material på samma form "
-            "som materialdatabasen."
+            """URL to a JSON resource. Expected format: either a single material
+            object {'name':..., 'density':..., 'young_modulus_pa':..., 'yield_strength_pa':...}
+            or a dict of multiple materials in the same format as the database."""
         )
     )
 
 
 @tool("download_material", args_schema=DownloadMaterialInput)
 def download_material(url: str) -> str:
-    """Hämta nytt materialdata från en URL (JSON) och lägg till det i den
-    lokala materialdatabasen. Används för att utöka materialbiblioteket i
-    framtiden utan att koda om verktyget."""
+    """Fetch new material data from a URL (JSON) and add it to the local
+    material database. Used to extend the material library in the future
+    without changing code."""
     import requests
     try:
         resp = requests.get(url, timeout=15)

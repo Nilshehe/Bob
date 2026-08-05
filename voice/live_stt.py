@@ -1,20 +1,3 @@
-"""
-live_stt.py
-
-Huvudloop: väntar på wake word (wake_word.py), spelar sen in ditt
-kommando med VAD (riktig taldetektering, inte blind timeout) och
-transkriberar med faster-whisper på svenska.
-
-Förutsätter att du redan kört:
-    python wake_word.py enroll
-
-Kör:
-    python live_stt.py
-
-Beroenden:
-    pip install numpy sounddevice webrtcvad faster-whisper
-"""
-
 import sys
 import time
 import collections

@@ -12,7 +12,7 @@ from typing import Optional
 
 
 def load_env_file() -> None:
-    """Ladda nycklar från .env i projektmappen om de inte redan finns i miljön."""
+    """Load keys from a .env file in the project directory if they are not already present in the environment."""
     env_path = Path(__file__).resolve().parent / ".env"
     if not env_path.exists():
         return
@@ -86,7 +86,7 @@ def _wait_for_oauth_code(port: int = 8080, timeout_seconds: int = 90) -> Optiona
 
 
 def spotify_login() -> str:
-    """Starta en enkel inloggning via Spotify OAuth och fånga callbacken lokalt."""
+    """Start a simple Spotify OAuth login flow and capture the callback locally."""
     manager = _build_auth_manager()
     auth_url = manager.get_authorize_url()
     webbrowser.open(auth_url)
@@ -126,7 +126,7 @@ def _get_spotify_client() -> spotipy.Spotify:
 # ---------- Actions ----------
 #@tool
 def spotify_control(action: str, query: Optional[str] = None) -> str:
-    """Styr Spotify: play, pause, next, previous, search_and_play, current, volume:<0-100>"""
+    """Control Spotify: play, pause, next, previous, search_and_play, current, volume:<0-100>"""
     try:
         _get_spotify_client()
         if action == "play":
@@ -238,7 +238,7 @@ def spotify_control(action: str, query: Optional[str] = None) -> str:
 class SpotifyInput(BaseModel):
     action: str = Field(
         description=(
-            "En av: 'play', 'pause', 'next', 'previous', 'current', "
+            "One of: 'play', 'pause', 'next', 'previous', 'current', "
             "'search_and_play', 'volume:<0-100>', 'shuffle:<on|off>', "
             "'repeat:<track|context|off>', 'add_to_queue', 'list_devices', "
             "'transfer_device'"
@@ -247,8 +247,8 @@ class SpotifyInput(BaseModel):
     query: Optional[str] = Field(
         default=None,
         description=(
-            "Sökfråga (låt/artist) - krävs för 'search_and_play' och "
-            "'add_to_queue'. Enhetsnamn - krävs för 'transfer_device'."
+            "Search query (song/artist) - required for 'search_and_play' and "
+            "'add_to_queue'. Device name - required for 'transfer_device'."
         ),
     )
  
