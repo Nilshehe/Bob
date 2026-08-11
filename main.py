@@ -43,7 +43,7 @@ llm = ChatOllama(model = "Qwen3:4b", reasoning = True)
 from tools.ddgs_tool import web_search
 from tools.sok_visible import search_visible_webpage, download_file, move_file, get_clickable_elements, click_on_page, type_into_page, scroll_page, click_and_download, get_page_text, open_browser
 from tools.code_ai import code_ai, code_ai_status
-from tools.skills_tools import list_skills, read_skill, create_skill
+from tools.research_ai import research_ai, research_ai_status
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -57,14 +57,13 @@ tools = [web_search,
         open_browser,
         code_ai,
         code_ai_status,
-        list_skills,
-        read_skill,
-        create_skill
+        research_ai,
+        research_ai_status
 ]
 
 
 system_prompt = """You are a helpful assistant. Allways check if there are anny awailable skills that can help you with the task. If there are, use them. If not, try to solve the task yourself.
-If you need to use a skill, first call list_skills() to see if there is a skill that can help you. If there is, call read_skill() to get the full content of the skill and use it to solve the task. If there is no skill that can help you, try to solve the task yourself."""
+"""
 
 #config
 config = {"configurable": {"thread_id": "some_id"}}

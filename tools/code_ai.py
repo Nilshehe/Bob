@@ -1,27 +1,101 @@
 import asyncio
-import re
 import os
 import uuid
 import threading
+import contextvars
 from pathlib import Path
+
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
+from langchain.agents import create_agent
 
 from tools.shared_resources import GPU_LOCK
 
 CODE_MODEL = os.environ.get("CODE_AI_MODEL", "qwen3:4b")
-MAX_RETRIES = 2
-EXEC_TIMEOUT = 20  # sekunder
+EXEC_TIMEOUT = 20          # sekunder per körning av run_python
+RECURSION_LIMIT = 15       # max antal agent-steg innan vi ger upp
 
-WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "ai_workspace" / "downloads"
+WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "ai_workspace" / "code"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+
+_jobs: dict[str, dict] = {}
+_notify_callback = None
+
+
+def register_notify_callback(fn) -> None:
+    global _notify_callback
+    _notify_callback = fn
+
+
+# ---------------------------------------------------------------------------
+# Håller koll på vilket job_id som hör till vilken körning.
+# ContextVar (inte threading.local!) eftersom flera jobb kan köra samtidigt
+# som asyncio-tasks på samma bakgrundstråd -- threading.local hade läckt
+# job_id mellan parallella jobb.
+# ---------------------------------------------------------------------------
+_job_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("job_id", default="adhoc")
+
+
+# ---------------------------------------------------------------------------
+# Verktyget agenten använder för att testa/köra sin egen kod
+# ---------------------------------------------------------------------------
+@tool
+async def run_python(code: str) -> str:
+    """Kör Python 3-kod i en isolerad subprocess och returnerar stdout/stderr.
+    Använd det här verktyget för att testa och köra kod innan du svarar.
+    Koden måste skriva ut resultatet med print(). Om körningen misslyckas,
+    läs felmeddelandet, fixa koden och kör run_python igen."""
+    job_id = _job_id_var.get()
+    job = _jobs.get(job_id)
+
+    attempt = 0
+    if job is not None:
+        job["_attempt"] += 1
+        attempt = job["_attempt"]
+
+    filename = f"{job_id}_v{attempt}.py"
+    path = WORKSPACE_DIR / filename
+    path.write_text(code, encoding="utf-8")
+    if job is not None:
+        job["_files"].append(path)
+
+    proc = await asyncio.create_subprocess_exec(
+        "python3", str(path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return f"FEL: Timeout efter {EXEC_TIMEOUT}s"
+
+    if proc.returncode == 0:
+        if job is not None:
+            job["_last_success_path"] = path
+        return f"OK\n{stdout.decode('utf-8', errors='replace').strip()}"
+
+    return f"FEL (exit {proc.returncode})\n{stderr.decode('utf-8', errors='replace').strip()}"
+
+
+CODE_TOOLS = [run_python]
 
 _code_llm = ChatOllama(model=CODE_MODEL)
 
 SYSTEM_PROMPT = (
-    "Du är en kodassistent. Skriv fristående, körbar Python 3-kod som löser "
-    "uppgiften. Koden ska skriva ut resultatet med print(). Inga förklaringar, "
-    "inga markdown-headers — enbart ett enda ```python kodblock."
+    "Du är en kodassistent med tillgång till verktyget run_python för att "
+    "skriva och köra Python 3-kod. Lös uppgiften genom att skriva kod, köra "
+    "den med run_python, och om körningen misslyckas -- läs felet, fixa "
+    "koden och kör run_python igen. Koden ska skriva ut resultatet med "
+    "print(). Iterera tills koden fungerar eller du är säker på att "
+    "uppgiften inte går att lösa. Avsluta alltid med ett kort svar i text "
+    "som sammanfattar resultatet -- inga markdown-headers."
+)
+
+_code_agent = create_agent(
+    model=_code_llm,
+    system_prompt=SYSTEM_PROMPT,
+    tools=CODE_TOOLS,
 )
 
 # ---------------------------------------------------------------------------
@@ -37,71 +111,9 @@ def _start_bg_loop():
 
 threading.Thread(target=_start_bg_loop, daemon=True).start()
 
-_jobs: dict[str, dict] = {}
-_notify_callback = None
-
-
-def register_notify_callback(fn) -> None:
-    global _notify_callback
-    _notify_callback = fn
-
-
-def _extract_code(text: str) -> str:
-    match = re.search(r"```python\s*(.*?)```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    match = re.search(r"```\s*(.*?)```", text, re.DOTALL)
-    return match.group(1).strip() if match else text.strip()
-
-
-async def _generate_code(task: str, error_context: str | None = None) -> str:
-    """Genererar kod via Ollama. Väntar på GPU_LOCK innan själva
-    modellanropet -- delar resursen med huvud-AI:n istället för att
-    krocka med den. Låset tas i en executor-tråd så bakgrunds-loopen
-    inte blockeras medan den väntar."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    if error_context:
-        messages.append({
-            "role": "user",
-            "content": f"Uppgift: {task}\n\nFörra försöket gav detta fel:\n{error_context}\nFixa koden.",
-        })
-    else:
-        messages.append({"role": "user", "content": task})
-
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, GPU_LOCK.acquire)
-    try:
-        resp = await _code_llm.ainvoke(messages)
-    finally:
-        GPU_LOCK.release()
-
-    return _extract_code(resp.content)
-
-
-async def _run_code(code: str, job_id: str, attempt: int) -> tuple[bool, str, Path]:
-    filename = f"{job_id}_v{attempt}.py"
-    path = WORKSPACE_DIR / filename
-    path.write_text(code, encoding="utf-8")
-
-    proc = await asyncio.create_subprocess_exec(
-        "python3", str(path),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
-    except asyncio.TimeoutError:
-        proc.kill()
-        return False, f"Timeout efter {EXEC_TIMEOUT}s", path
-
-    if proc.returncode == 0:
-        return True, stdout.decode("utf-8", errors="replace"), path
-    return False, stderr.decode("utf-8", errors="replace"), path
-
 
 def _cleanup_files(paths: list[Path], keep: Path | None) -> None:
-    """Tar bort alla skrivna filer i `paths` utom `keep` (None = ta bort alla).
-    Städar upp misslyckade försök/hela jobbet från ai_workspace/downloads."""
+    """Tar bort alla skrivna filer i `paths` utom `keep` (None = ta bort alla)."""
     for p in paths:
         if p == keep:
             continue
@@ -113,45 +125,53 @@ def _cleanup_files(paths: list[Path], keep: Path | None) -> None:
 
 async def _execute_job(job_id: str, task: str) -> None:
     _jobs[job_id]["status"] = "running"
-    code = await _generate_code(task)
-    last_error = None
-    written_paths: list[Path] = []
-    final_path: Path | None = None
+    _jobs[job_id]["_attempt"] = 0
+    _jobs[job_id]["_files"] = []
+    _jobs[job_id]["_last_success_path"] = None
 
-    for attempt in range(MAX_RETRIES + 1):
-        ok, output, path = await _run_code(code, job_id, attempt)
-        written_paths.append(path)
-
-        if ok:
-            final_path = path
-            _jobs[job_id]["status"] = "done"
-            _jobs[job_id]["result"] = (
-                f"### Fil\n`{path}`\n\n"
-                f"### Kod\n```python\n{code}\n```\n\n### Resultat\n```\n{output.strip()}\n```"
+    token = _job_id_var.set(job_id)
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, GPU_LOCK.acquire)
+        try:
+            result = await _code_agent.ainvoke(
+                {"messages": [{"role": "user", "content": task}]},
+                config={
+                    "configurable": {"thread_id": f"code_ai_{job_id}"},
+                    "recursion_limit": RECURSION_LIMIT,
+                },
             )
-            _cleanup_files(written_paths, keep=final_path)
-            if _notify_callback:
-                _notify_callback(job_id, _jobs[job_id]["result"])
-            return
+        finally:
+            GPU_LOCK.release()
+    except Exception as exc:  # t.ex. recursion_limit nådd
+        job = _jobs[job_id]
+        job["status"] = "failed"
+        job["result"] = f"### Fel\n```\n{exc}\n```"
+        _cleanup_files(job["_files"], keep=None)
+        if _notify_callback:
+            _notify_callback(job_id, job["result"])
+        return
+    finally:
+        _job_id_var.reset(token)
 
-        last_error = output
-        if attempt < MAX_RETRIES:
-            code = await _generate_code(task, error_context=last_error)
+    job = _jobs[job_id]
+    final_text = result["messages"][-1].content
+    keep = job["_last_success_path"]
 
-    _jobs[job_id]["status"] = "failed"
-    _jobs[job_id]["result"] = (
-        f"### Kod (misslyckades)\n```python\n{code}\n```\n\n### Sista felet\n```\n{last_error}\n```"
-    )
-    # Jobbet gick aldrig igenom -> ingen fil är värd att spara, städa bort allt.
-    _cleanup_files(written_paths, keep=None)
+    job["status"] = "done"
+    file_note = f"`{keep}`" if keep else "ingen fil sparades (inget lyckat körningssteg)"
+    job["result"] = f"### Fil\n{file_note}\n\n### Svar\n{final_text}"
+
+    _cleanup_files(job["_files"], keep=keep)
     if _notify_callback:
-        _notify_callback(job_id, _jobs[job_id]["result"])
+        _notify_callback(job_id, job["result"])
 
 
 @tool
 def code_ai(task: str) -> str:
-    """Startar ett bakgrundsjobb som skriver och kör Python-kod lokalt (Ollama)
-    för att lösa `task`. Returnerar direkt ett job_id.
+    """Startar ett bakgrundsjobb där en Ollama-agent skriver och kör Python-kod
+    (via verktyget run_python) för att lösa `task`, och itererar själv tills
+    det funkar eller den ger upp. Returnerar direkt ett job_id.
 
     VIKTIGT: Jobbet kör i bakgrunden och tar tid. Svara användaren att
     jobbet har startats och gå vidare. Du meddelas automatiskt när
