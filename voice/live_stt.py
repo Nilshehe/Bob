@@ -11,20 +11,20 @@ from faster_whisper import WhisperModel
 # ---------------- KONFIG ----------------
 SAMPLE_RATE = 16000
 VAD_FRAME_MS = 20
-VAD_FRAME_SIZE = int(SAMPLE_RATE * VAD_FRAME_MS / 1000)   # 320 samples
+VAD_FRAME_SIZE = int(SAMPLE_RATE * VAD_FRAME_MS / 1000)
 
 VAD_AGGRESSIVENESS = 2
 SILENCE_TIMEOUT_MS = 800
 MAX_UTTERANCE_S = 30
 
 COMMAND_MODEL_SIZE = "medium"
-WHISPER_DEVICE = "cpu"             # "cuda" om du har gpu
+WHISPER_DEVICE = "cpu"
 WHISPER_COMPUTE = "int8"
 LANGUAGE = "sv"
 # -----------------------------------------
 
 vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
-audio_q: "queue.Queue[bytes]" = queue.Queue()
+audio_q = queue.Queue()
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -78,17 +78,11 @@ def transcribe(pcm_bytes: bytes, whisper_model: WhisperModel) -> str:
     segments, _ = whisper_model.transcribe(audio_np, language=LANGUAGE, beam_size=5)
     return " ".join(seg.text.strip() for seg in segments).strip()
 
-
-
+print(f"Laddar Whisper-modell ({COMMAND_MODEL_SIZE}, svenska)...")
+WHISPER = WhisperModel(COMMAND_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
+print("Klar.")
 
 def stt_main():
-    #templates = wake_word.load_templates()
-    #print(f"Laddade {len(templates)} mallar för '{wake_word.WAKE_WORD_LABEL}'.")
-
-    print(f"Laddar Whisper-modell ({COMMAND_MODEL_SIZE}, svenska)...")
-    command_model = WhisperModel(COMMAND_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
-    print("Klar.")
-
     with sd.RawInputStream(
         samplerate=SAMPLE_RATE,
         blocksize=VAD_FRAME_SIZE,
@@ -102,7 +96,7 @@ def stt_main():
         print("Lyssnar på kommando...")
         cmd_pcm = record_utterance()
 
-    cmd_text = transcribe(cmd_pcm, command_model)
+    cmd_text = transcribe(cmd_pcm, WHISPER)
     return cmd_text
         
 
