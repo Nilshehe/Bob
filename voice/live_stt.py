@@ -80,7 +80,7 @@ def transcribe(pcm_bytes: bytes, whisper_model: WhisperModel) -> str:
 
 print(f"Laddar Whisper-modell ({COMMAND_MODEL_SIZE}, svenska)...")
 WHISPER = WhisperModel(COMMAND_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
-print("Klar.")
+print("Ready.")
 
 def stt_main():
     with sd.RawInputStream(
@@ -93,7 +93,7 @@ def stt_main():
         while not audio_q.empty():
             audio_q.get()
 
-        print("Lyssnar på kommando...")
+        print("Listening for command...")
         cmd_pcm = record_utterance()
 
     cmd_text = transcribe(cmd_pcm, WHISPER)

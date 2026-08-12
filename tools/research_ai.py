@@ -47,7 +47,7 @@ def register_notify_callback(fn) -> None:
 # ---------------------------------------------------------------------------
 
 def _slugify(text: str) -> str:
-    """Gör ett filvänligt namn av uppgiften."""
+    """Make a filesystem-friendly name from the task text."""
     import re
     text = text.lower().strip()
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -67,7 +67,7 @@ def _current_research_path() -> Path:
 
 @tool
 def save_research(content: str, section: str = "Research") -> str:
-    """Spara research i aktuell fil."""
+    """Save research to the current file."""
     path = _current_research_path()
     with path.open("a", encoding="utf-8") as f:
         f.write(f"\n\n## {section}\n\n")
@@ -78,19 +78,19 @@ def save_research(content: str, section: str = "Research") -> str:
 
 @tool
 def read_research() -> str:
-    """Läs research från aktuell fil."""
+    """Read research from the current file."""
     path = _current_research_path()
     if not path.exists():
-        return "Ingen research har sparats ännu."
+        return "No research has been saved yet."
     return path.read_text(encoding="utf-8")
 
 
 @tool
 def list_research_files() -> str:
-    """Lista alla research-filer i workspace."""
+    """List all research files in the workspace."""
     files = sorted(WORKSPACE_DIR.glob("*.md"))
     if not files:
-        return "Inga research-filer finns ännu."
+        return "No research files exist yet."
     return "\n".join(str(path) for path in files)
 
 
@@ -115,59 +115,57 @@ RESEARCH_TOOLS = [
 _research_llm = ChatOllama(model=RESEARCH_MODEL)
 
 SYSTEM_PROMPT = """
-Du är en autonom research-agent.
+You are an autonomous research agent.
 
-Ditt jobb är att göra grundlig, källbaserad research för användarens uppgift.
-Du får använda web_search hur många gånger som behövs. Gör inte bara en eller
-två sökningar om frågan kräver mer research.
+Your job is to perform thorough, source-based research for the user's task.
+You may use `web_search` as many times as necessary. Do not stop at a few
+queries if the question requires more investigation.
 
-ARBETSSÄTT:
+WORKFLOW:
 
-1. Förstå exakt vad användaren vill veta.
-2. Dela upp frågan i relevanta delområden.
-3. Sök på webben med web_search.
-4. Följ upp viktiga resultat med nya, mer specifika sökningar.
-5. Jämför flera källor när det är relevant.
-6. Kontrollera motsägelser och försök hitta den mest tillförlitliga
-   informationen.
-7. Prioritera primärkällor, officiell dokumentation, forskning och andra
-   trovärdiga källor när sådana finns.
-8. Notera datum och om information kan ha ändrats.
-9. Spara research löpande med save_research.
-10. Läs tidigare sparad research med read_research innan du gör om arbete.
-11. Om uppgiften kräver programmering, teknisk analys eller testning kan du
-    använda code_ai. code_ai kör i bakgrunden. Använd code_ai_status för att
-    kontrollera ett jobb när det behövs.
-12. Fortsätt forska tills du har tillräckligt starkt underlag för att besvara
-    användarens fråga. Sluta inte bara för att du har hittat ett första
-    användbart svar.
-13. Spara en tydlig slutrapport i research-filen med:
-    - frågeställning
-    - sammanfattning
-    - viktiga fakta
-    - detaljerade fynd
-    - källor
-    - osäkerheter/motsägelser
-    - slutsats
-    - eventuella rekommendationer
+1. Understand exactly what the user wants to know.
+2. Break the question into relevant subtopics.
+3. Search the web using `web_search`.
+4. Follow up important results with new, more specific searches.
+5. Compare multiple sources when relevant.
+6. Check for contradictions and aim to find the most reliable information.
+7. Prioritize primary sources, official documentation, academic research,
+   and other credible sources when available.
+8. Note dates and whether information may have changed.
+9. Save research incrementally with `save_research`.
+10. Read previously saved research with `read_research` before duplicating work.
+11. If the task requires programming, technical analysis, or testing you may
+    use `code_ai`. `code_ai` runs asynchronously. Use `code_ai_status` to
+    check a job when needed.
+12. Continue researching until you have sufficiently strong evidence to answer
+    the user's question. Do not stop after finding the first usable result.
+13. Save a clear final report to the research file including:
+    - the question
+    - an executive summary
+    - key facts
+    - detailed findings
+    - sources
+    - uncertainties/contradictions
+    - conclusions
+    - any recommendations
 
-VIKTIGT OM KÄLLOR:
-- Hitta inte på källor.
-- Skilj mellan vad källorna faktiskt säger och egna slutsatser.
-- Om två källor motsäger varandra, skriv det och undersök vidare.
-- Använd så många sökningar som behövs för att verifiera viktiga påståenden.
-- Spara relevanta URL:er/källidentifierare i research-filen om web_search
-  returnerar dem.
+SOURCE GUIDELINES:
+- Do not invent sources.
+- Distinguish between what sources actually state and your own conclusions.
+- If two sources contradict each other, note it and investigate further.
+- Use as many searches as necessary to verify important claims.
+- Save relevant URLs/source identifiers in the research file when `web_search`
+  returns them.
 
-VIKTIGT OM CODE_AI:
-- code_ai är asynkront och returnerar ett job_id.
-- När du startar code_ai ska du inte anta resultatet.
-- Använd code_ai_status(job_id) när du behöver resultatet.
-- Använd inte code_ai om vanlig research räcker.
+ABOUT `code_ai`:
+- `code_ai` is asynchronous and returns a job_id.
+- When you start `code_ai`, do not assume results immediately.
+- Use `code_ai_status(job_id)` to retrieve results when ready.
+- Do not use `code_ai` if ordinary research suffices.
 
-SVAR:
-När researchen är klar, ge användaren ett kort men informativt slutresultat.
-Den fullständiga researchen ska finnas sparad i ai_workspace/research.
+ANSWER FORMAT:
+When the research is complete, provide the user with a brief but informative
+final answer. The full research should be saved in `ai_workspace/research`.
 """
 
 _research_agent = create_agent(
@@ -221,7 +219,7 @@ async def _execute_job(job_id: str, task: str) -> None:
 
     except Exception as exc:
         job["status"] = "failed"
-        job["result"] = f"Research-agenten misslyckades:\n{exc}"
+        job["result"] = f"Research agent failed:\n{exc}"
 
         if _notify_callback:
             _notify_callback(job_id, job["result"])
@@ -254,16 +252,16 @@ async def _execute_job(job_id: str, task: str) -> None:
 
     # Skriv slutrapporten i filen
     with new_path.open("a", encoding="utf-8") as f:
-        f.write("\n\n## Slutrapport\n\n")
+        f.write("\n\n## Final report\n\n")
         f.write(final_message)
         f.write("\n")
 
     job["status"] = "done"
     job["research_file"] = str(new_path)
     job["result"] = (
-        f"Research klar.\n\n"
-        f"Research-fil: {new_path}\n\n"
-        f"Sammanfattning:\n{final_message}"
+        f"Research complete.\n\n"
+        f"Research file: {new_path}\n\n"
+        f"Summary:\n{final_message}"
     )
 
     if _notify_callback:
@@ -276,7 +274,7 @@ async def _execute_job(job_id: str, task: str) -> None:
 
 @tool
 def research_ai(task: str) -> str:
-    """Starta ett research-jobb i bakgrunden. Returnerar job_id."""
+    """Start a research job in the background. Returns job_id."""
     job_id = str(uuid.uuid4())[:8]
 
     research_path = WORKSPACE_DIR / f"{job_id}_research.md"
@@ -299,27 +297,27 @@ def research_ai(task: str) -> str:
     )
 
     return (
-        f"Research-jobb startat: {job_id}. "
-        f"Research sparas i {research_path}. "
-        f"Kolla status med research_ai_status('{job_id}')."
+        f"Research job started: {job_id}. "
+        f"Research is saved in {research_path}. "
+        f"Check status with research_ai_status('{job_id}')."
     )
 
 
 @tool
 def research_ai_status(job_id: str) -> str:
-    """Kolla status för ett research-jobb."""
+    """Check status for a research job."""
     job = _jobs.get(job_id)
     if not job:
-        return f"Okänt job_id: {job_id}"
+        return f"Unknown job_id: {job_id}"
 
     if job["status"] in ("queued", "running"):
         return (
-            f"Research-jobb {job_id}: {job['status']}...\n"
-            f"Fil: {job['research_file']}"
+            f"Research job {job_id}: {job['status']}...\n"
+            f"File: {job['research_file']}"
         )
 
     return (
-        f"Research-jobb {job_id} ({job['status']}):\n\n"
+        f"Research job {job_id} ({job['status']}):\n\n"
         f"{job['result']}"
     )
 

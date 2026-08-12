@@ -154,11 +154,11 @@ def _get_last_ai_reasoning(cfg) -> str:
 def _get_user_reply(voice_mode: bool):
     def _inner(ai_text: str) -> str:
         if voice_mode:
-            print("\n(lyssnar på ditt svar...)")
+            print("\n(listening for your reply...)")
             reply = stt_main()
-            print(f"Du sa: {reply}")
+            print(f"You said: {reply}")
             return reply
-        return input("\nDitt svar: ")
+        return input("\nYour reply: ")
     return _inner
 
 
@@ -179,9 +179,9 @@ def interupt_identifier(chunk, voice_mode: bool = None):
         decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode))
 
         if decision["type"] == "reject":
-            print(f"\033[31mAvvisat: {decision['message']}\033[0m")
+            print(f"\033[31mRejected: {decision['message']}\033[0m")
         else:
-            print("\033[32mGodkänt.\033[0m")
+            print("\033[32mApproved.\033[0m")
 
         for token_data, block in resume_after_interrupt(agent, config, decision):
             response, node_type = get_last_text(token_data, block)

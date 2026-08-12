@@ -1,11 +1,12 @@
 import os
+import sys
 from langchain_core.tools import tool
 
 
 @tool
-def shutdown_ai(reason: str = "Användaren bad om avstängning") -> str:
-    """Stänger av AI-agenten helt. Använd ENDAST när användaren uttryckligen
-    ber att programmet ska avslutas/stängas av (t.ex. 'stäng av dig själv',
-    'avsluta programmet'). Kräver ingen bekräftelse - avslutar direkt."""
-    print(f"\n[Bob] Stänger av: {reason}")
-    os.exit(0)
+def shutdown_ai(reason: str = "User requested shutdown") -> str:
+    """Shuts down the AI agent completely. USE ONLY when the user explicitly
+    requests the program to exit/shutdown (e.g. 'shut yourself down',
+    'exit the program'). Requires no confirmation - exits immediately."""
+    print(f"\n[Bob] Shutting down: {reason}")
+    sys.exit(0)
