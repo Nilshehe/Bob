@@ -1,3 +1,3 @@
 import threading
 
-GPU_LOCK = threading.Lock()
+GPU_LOCK = threading.RLock()

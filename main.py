@@ -11,6 +11,10 @@ from voice.wake_word import wait_for_wake_word
 import queue
 from tools.shared_resources import GPU_LOCK
 from tools.code_ai import register_notify_callback
+from tools.approval_agent import run_approval_conversation
+
+# sätts av chatloop() beroende på om voice mode eller text mode valdes
+VOICE_MODE = False
 
 
 #job done notifications
@@ -44,6 +48,7 @@ from tools.ddgs_tool import web_search
 from tools.sok_visible import search_visible_webpage, download_file, move_file, get_clickable_elements, click_on_page, type_into_page, scroll_page, click_and_download, get_page_text, open_browser
 from tools.code_ai import code_ai, code_ai_status
 from tools.research_ai import research_ai, research_ai_status
+from tools.quit import shutdown_ai
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -58,7 +63,8 @@ tools = [web_search,
         code_ai,
         code_ai_status,
         research_ai,
-        research_ai_status
+        research_ai_status,
+        shutdown_ai
 ]
 
 
@@ -125,8 +131,42 @@ def main(msg, userid):
 
 
 
+#hämta resonemanget (reasoning-texten) som agenten redan producerat innan den bestämde
+#sig för att göra tool-anropet som nu ligger på interrupt. Detta är samma "tanke" som
+#ledde fram till beslutet, hämtat direkt ur checkpointern - inget nytt gissas fram.
+def _get_last_ai_reasoning(cfg) -> str:
+    try:
+        state = agent.get_state(cfg)
+        messages = state.values.get("messages", [])
+    except Exception:
+        return ""
+
+    for msg in reversed(messages):
+        blocks = getattr(msg, "content_blocks", None)
+        if not blocks:
+            continue
+        reasoning_parts = [b.get("reasoning", "") for b in blocks if b.get("type") == "reasoning"]
+        if reasoning_parts:
+            return "".join(reasoning_parts).strip()
+    return ""
+
+
+def _get_user_reply(voice_mode: bool):
+    def _inner(ai_text: str) -> str:
+        if voice_mode:
+            print("\n(lyssnar på ditt svar...)")
+            reply = stt_main()
+            print(f"Du sa: {reply}")
+            return reply
+        return input("\nDitt svar: ")
+    return _inner
+
+
 #identifiera interupts
-def interupt_identifier(chunk):
+def interupt_identifier(chunk, voice_mode: bool = None):
+    if voice_mode is None:
+        voice_mode = VOICE_MODE
+
     if "__interrupt__" in chunk["data"]:
         interrupt = chunk['data']['__interrupt__']
         if isinstance(interrupt, tuple):
@@ -134,23 +174,19 @@ def interupt_identifier(chunk):
         req = interrupt.value['action_requests'][0]
         tool_name = req['name']
         args = req.get("args") or req.get("arguments") or {}
+        reasoning = _get_last_ai_reasoning(config)
 
-        print(f"\033[33mInterrupt received: \"{tool_name}\" with args: \"{args}\"\033[0m")
-        resp = input("Enter your decision (approve (leave blank)/reject (r)/edit(e(not avaible))): ").strip().lower()
+        decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode))
 
-        if not resp:
-            decision = {"type": "approve"}
-        elif resp == "r":
-            rejectmsg = input("Enter a reject message: ")
-            decision = {"type": "reject", "message": rejectmsg}
+        if decision["type"] == "reject":
+            print(f"\033[31mAvvisat: {decision['message']}\033[0m")
         else:
-            print("sorry, edit functionality not implemented yet")
-            decision = {"type": "reject", "message": "edit not implemented"}
+            print("\033[32mGodkänt.\033[0m")
 
         for token_data, block in resume_after_interrupt(agent, config, decision):
             response, node_type = get_last_text(token_data, block)
             if node_type == "interrupt":
-                interupt_identifier(block)
+                interupt_identifier(block, voice_mode)
             else:
                 formater(response, node_type)
             
@@ -175,7 +211,9 @@ def resume_after_interrupt(agent, config, decision):
 
 
 def chatloop():
-    if input("voice mode? (y/n): ").strip().lower() == "y":
+    global VOICE_MODE
+    VOICE_MODE = input("voice mode? (y/n): ").strip().lower() == "y"
+    if VOICE_MODE:
         while True:
             process_pending_notifications()
             print("\nWaiting for wake word...")
@@ -202,4 +240,3 @@ def chatloop():
 
 if __name__ == "__main__":
     chatloop()
-
