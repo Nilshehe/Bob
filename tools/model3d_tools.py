@@ -80,56 +80,56 @@ DEFAULT_MATERIALS = {
         "density": 1250, "young_modulus_pa": 3.5e9,
         "yield_strength_pa": 50e6, "poisson_ratio": 0.36,
         "fatigue_limit_ratio": 0.30, "elongation_at_break_pct": 4,
-        "notes": "Vanlig 3D-print (FDM), spröd vid låg temp.",
+            "notes": "Common 3D-print (FDM), brittle at low temperature.",
     },
     "abs": {
         "density": 1040, "young_modulus_pa": 2.3e9,
         "yield_strength_pa": 40e6, "poisson_ratio": 0.35,
         "fatigue_limit_ratio": 0.35, "elongation_at_break_pct": 25,
-        "notes": "Segare än PLA, tål högre temperatur.",
+        "notes": "Tougher than PLA, tolerates higher temperatures.",
     },
     "tpu_95a": {
         "density": 1210, "young_modulus_pa": 26e6,
         "yield_strength_pa": 35e6, "poisson_ratio": 0.45,
         "fatigue_limit_ratio": 0.45, "elongation_at_break_pct": 450,
-        "notes": ("Flexibel elastomer (Shore 95A), typisk för stötdämpande skal/case. "
-                   "'yield_strength' avser här draghållfasthet, inte klassisk flytgräns."),
+        "notes": ("Flexible elastomer (Shore 95A), typical for shock-absorbing shells/cases. "
+               "Here 'yield_strength' refers to tensile strength, not a classical yield limit."),
     },
     "aluminum_6061": {
         "density": 2700, "young_modulus_pa": 69e9,
         "yield_strength_pa": 276e6, "poisson_ratio": 0.33,
         "fatigue_limit_ratio": 0.30, "elongation_at_break_pct": 12,
-        "notes": "Vanlig konstruktionsaluminium.",
+        "notes": "Common structural aluminum.",
     },
     "steel_mild": {
         "density": 7850, "young_modulus_pa": 200e9,
         "yield_strength_pa": 250e6, "poisson_ratio": 0.29,
         "fatigue_limit_ratio": 0.50, "elongation_at_break_pct": 20,
-        "notes": "Konstruktionsstål, AISI 1018-liknande.",
+        "notes": "Mild structural steel, AISI 1018-like.",
     },
     "titanium_ti6al4v": {
         "density": 4430, "young_modulus_pa": 113.8e9,
         "yield_strength_pa": 880e6, "poisson_ratio": 0.34,
         "fatigue_limit_ratio": 0.55, "elongation_at_break_pct": 14,
-        "notes": "Flyg-/rymdkvalitet titanlegering.",
+        "notes": "Aerospace-grade titanium alloy.",
     },
     "wood_pine": {
         "density": 500, "young_modulus_pa": 9e9,
         "yield_strength_pa": 40e6, "poisson_ratio": 0.3,
         "fatigue_limit_ratio": 0.25, "elongation_at_break_pct": 2,
-        "notes": "Ungefärliga värden, starkt riktningsberoende i verkligheten.",
+        "notes": "Approximate values; real properties are strongly direction-dependent.",
     },
     "glass_soda_lime": {
         "density": 2500, "young_modulus_pa": 70e9,
         "yield_strength_pa": 33e6, "poisson_ratio": 0.22,
         "fatigue_limit_ratio": 0.15, "elongation_at_break_pct": 0.1,
-        "notes": "Mycket spröd, låg draghållfasthet i praktiken.",
+        "notes": "Very brittle; low practical tensile strength.",
     },
     "concrete": {
         "density": 2400, "young_modulus_pa": 30e9,
         "yield_strength_pa": 3e6, "poisson_ratio": 0.2,
         "fatigue_limit_ratio": 0.20, "elongation_at_break_pct": 0.02,
-        "notes": "Draghållfasthet (ej tryck), verklig tryckhållfasthet är mycket högre.",
+        "notes": "Tensile strength (not compressive); actual compressive strength is much higher.",
     },
 }
 
@@ -154,12 +154,12 @@ def _save_materials(mats: dict) -> None:
 # Detta är en förenklad approximation, inte labbdata.
 
 ENVIRONMENTS = {
-    "normal": {"yield_mult": 1.00, "modulus_mult": 1.00, "desc": "20°C, torrt, ingen korrosion."},
-    "high_heat": {"yield_mult": 0.70, "modulus_mult": 0.85, "desc": "~150°C: material mjuknar."},
-    "low_temp": {"yield_mult": 0.90, "modulus_mult": 1.05, "desc": "~-30°C: styvare men sprödare (ej modellerat)."},
-    "humid": {"yield_mult": 0.95, "modulus_mult": 0.97, "desc": "Hög luftfuktighet, viss materialförsvagning."},
-    "corrosive": {"yield_mult": 0.60, "modulus_mult": 0.90, "desc": "Salt/kemisk miljö, betydande försvagning över tid."},
-    "underwater": {"yield_mult": 0.85, "modulus_mult": 0.95, "desc": "Nedsänkt i vatten, viss urlakning/korrosion."},
+    "normal": {"yield_mult": 1.00, "modulus_mult": 1.00, "desc": "20°C, dry, no corrosion."},
+    "high_heat": {"yield_mult": 0.70, "modulus_mult": 0.85, "desc": "~150°C: material softening."},
+    "low_temp": {"yield_mult": 0.90, "modulus_mult": 1.05, "desc": "~-30°C: stiffer but more brittle (not modeled)."},
+    "humid": {"yield_mult": 0.95, "modulus_mult": 0.97, "desc": "High humidity, some material weakening."},
+    "corrosive": {"yield_mult": 0.60, "modulus_mult": 0.90, "desc": "Salt/chemical environment, significant weakening over time."},
+    "underwater": {"yield_mult": 0.85, "modulus_mult": 0.95, "desc": "Submerged in water, some leaching/corrosion."},
 }
 
 
@@ -220,8 +220,8 @@ def lookup_reference_shape(query: str = "") -> str:
     hits = {k: v for k, v in shapes.items()
             if q in k.lower() or q in json.dumps(v, ensure_ascii=False).lower()}
     if not hits:
-        return (f"Ingen träff på '{query}'. Tillgängliga: {', '.join(shapes.keys())}. "
-                f"Sök upp officiella mått på webben och lägg till med add_reference_shape.")
+        return (f"No match for '{query}'. Available: {', '.join(shapes.keys())}. "
+                f"Look up official dimensions online and add them with add_reference_shape.")
     return json.dumps(hits, indent=2, ensure_ascii=False)
 
 

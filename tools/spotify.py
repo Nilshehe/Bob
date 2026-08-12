@@ -54,6 +54,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(b"<html><body><h3>Du kan nu stanga detta fonster.</h3></body></html>")
+        self.wfile.write(b"<html><body><h3>You may now close this window.</h3></body></html>")
 
     def log_message(self, format: str, *args) -> None:  # noqa: A003
         return None
@@ -90,20 +91,20 @@ def spotify_login() -> str:
     manager = _build_auth_manager()
     auth_url = manager.get_authorize_url()
     webbrowser.open(auth_url)
-    print("Öppnade Spotify-inloggning i webbläsaren.")
-    print("Vänta tills du har loggat in och blivit omdirigerad tillbaka.")
+    print("Opened Spotify login in browser.")
+    print("Wait until you have logged in and been redirected back.")
 
     code = _wait_for_oauth_code()
     if not code:
-        return "Inloggningen avbröts eller tog för lång tid. Försök igen."
+        return "Login cancelled or timed out. Please try again."
 
     token_info = manager.get_access_token(code, as_dict=False, check_cache=False)
     if not token_info:
-        return "Kunde inte hämta en giltig Spotify-token. Försök igen."
+        return "Could not obtain a valid Spotify token. Please try again."
 
     global sp
     sp = spotipy.Spotify(auth_manager=manager)
-    return "Inloggning lyckades. Du kan nu använda Spotify-kommandon."
+    return "Login succeeded. You can now use Spotify commands."
 
 
 def _get_spotify_client() -> spotipy.Spotify:
@@ -117,7 +118,7 @@ def _get_spotify_client() -> spotipy.Spotify:
         spotify_login()
         cached_token = manager.get_cached_token()
         if not cached_token:
-            raise RuntimeError("Spotify är inte inloggad. Kör spotify_login() först.")
+            raise RuntimeError("Spotify is not logged in. Run spotify_login() first.")
 
     sp = spotipy.Spotify(auth_manager=manager)
     return sp
@@ -131,84 +132,84 @@ def spotify_control(action: str, query: Optional[str] = None) -> str:
         _get_spotify_client()
         if action == "play":
             sp.start_playback()
-            return "Fortsätter uppspelning."
+            return "Resuming playback."
  
         elif action == "pause":
             sp.pause_playback()
-            return "Pausad."
+            return "Paused."
  
         elif action == "next":
             sp.next_track()
-            return "Nästa låt."
+            return "Next track."
  
         elif action == "previous":
             sp.previous_track()
-            return "Föregående låt."
+            return "Previous track."
  
         elif action == "current":
             track = sp.current_playback()
             if not track or not track.get("item"):
-                return "Inget spelas just nu."
+                return "Nothing is playing right now."
             item = track["item"]
             artists = ", ".join(a["name"] for a in item["artists"])
-            return f"Spelar just nu: {item['name']} - {artists}"
+            return f"Now playing: {item['name']} - {artists}"
  
         elif action == "search_and_play":
             if not query:
-                return "Ange en sökfråga (låt/artist) för search_and_play."
+                return "Provide a search query (song/artist) for search_and_play."
             results = sp.search(q=query, limit=1, type="track")
             tracks = results["tracks"]["items"]
             if not tracks:
-                return f"Hittade ingen låt för '{query}'."
+                return f"No track found for '{query}'."
             uri = tracks[0]["uri"]
             sp.start_playback(uris=[uri])
             artists = ", ".join(a["name"] for a in tracks[0]["artists"])
-            return f"Spelar nu: {tracks[0]['name']} - {artists}"
+            return f"Now playing: {tracks[0]['name']} - {artists}"
  
         elif action.startswith("volume:"):
             try:
                 vol = int(action.split(":")[1])
                 vol = max(0, min(100, vol))
             except (IndexError, ValueError):
-                return "Ogiltig volym. Använd t.ex. 'volume:50'."
+                return "Invalid volume. Use e.g. 'volume:50'."
             sp.volume(vol)
-            return f"Volym satt till {vol}%."
+            return f"Volume set to {vol}%."
  
         elif action.startswith("shuffle:"):
             state = action.split(":")[1].strip().lower()
             if state not in ("on", "off"):
-                return "Ogiltigt shuffle-läge. Använd 'shuffle:on' eller 'shuffle:off'."
+                return "Invalid shuffle state. Use 'shuffle:on' or 'shuffle:off'."
             sp.shuffle(state == "on")
-            return f"Shuffle {'på' if state == 'on' else 'av'}."
+            return f"Shuffle {'on' if state == 'on' else 'off'}."
  
         elif action.startswith("repeat:"):
             mode = action.split(":")[1].strip().lower()
             if mode not in ("track", "context", "off"):
-                return "Ogiltigt repeat-läge. Använd 'repeat:track', 'repeat:context' eller 'repeat:off'."
+                return "Invalid repeat mode. Use 'repeat:track', 'repeat:context' or 'repeat:off'."
             sp.repeat(mode)
-            labels = {"track": "låt", "context": "spellista/album", "off": "av"}
-            return f"Repeat satt till: {labels[mode]}."
+            labels = {"track": "track", "context": "playlist/album", "off": "off"}
+            return f"Repeat set to: {labels[mode]}."
  
         elif action == "add_to_queue":
             if not query:
-                return "Ange en sökfråga (låt/artist) för add_to_queue."
+                return "Provide a search query (song/artist) for add_to_queue."
             results = sp.search(q=query, limit=1, type="track")
             tracks = results["tracks"]["items"]
             if not tracks:
-                return f"Hittade ingen låt för '{query}'."
+                return f"No track found for '{query}'."
             sp.add_to_queue(tracks[0]["uri"])
             artists = ", ".join(a["name"] for a in tracks[0]["artists"])
-            return f"Lade till i kön: {tracks[0]['name']} - {artists}"
+            return f"Added to queue: {tracks[0]['name']} - {artists}"
  
         elif action == "list_devices":
             devices = sp.devices().get("devices", [])
             if not devices:
-                return "Inga aktiva enheter hittades. Öppna Spotify på en enhet."
+                return "No active devices found. Open Spotify on a device."
             lines = [
-                f"{d['name']} ({d['type']}){' [aktiv]' if d['is_active'] else ''} - id: {d['id']}"
+                f"{d['name']} ({d['type']}){' [active]' if d['is_active'] else ''} - id: {d['id']}"
                 for d in devices
             ]
-            return "Tillgängliga enheter:\n" + "\n".join(lines)
+            return "Available devices:\n" + "\n".join(lines)
  
         elif action == "transfer_device":
             if not query:
@@ -218,21 +219,21 @@ def spotify_control(action: str, query: Optional[str] = None) -> str:
                 (d for d in devices if query.lower() in d["name"].lower()), None
             )
             if not match:
-                return f"Hittade ingen enhet matchande '{query}'. Använd 'list_devices' för att se namn."
+                return f"No device matching '{query}' found. Use 'list_devices' to view names."
             sp.transfer_playback(device_id=match["id"], force_play=True)
-            return f"Bytte uppspelning till: {match['name']}"
+            return f"Switched playback to: {match['name']}"
  
         else:
             return (
-                f"Okänd action '{action}'. Giltiga: play, pause, next, previous, "
+                f"Unknown action '{action}'. Valid: play, pause, next, previous, "
                 "current, search_and_play, volume:<0-100>, shuffle:<on|off>, "
                 "repeat:<track|context|off>, add_to_queue, list_devices, transfer_device."
             )
  
     except spotipy.SpotifyException as e:
-        return f"Spotify-fel: {e}"
+        return f"Spotify error: {e}"
     except Exception as e:
-        return f"Fel: {e}"
+        return f"Error: {e}"
  
  
 class SpotifyInput(BaseModel):

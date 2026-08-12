@@ -25,7 +25,7 @@ def _safe_path(relative_path: str) -> Path:
     candidate = (AI_FOLDER / relative_path).resolve()
     if AI_FOLDER not in candidate.parents and candidate != AI_FOLDER:
         raise ValueError(
-            f"Otillåten sökväg: '{relative_path}' hamnar utanför sandlådan {AI_FOLDER}"
+            f"Unauthorized path: '{relative_path}' is outside the sandbox {AI_FOLDER}"
         )
     return candidate
  
@@ -125,17 +125,17 @@ def _search_visible_webpage_impl(page: Page, url: str, query: str, max_matches: 
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
         page.wait_for_timeout(500)  # låt sidan rendera klart
     except Exception as e:
-        return f"Kunde inte öppna {url}: {e}"
+        return f"Could not open {url}: {e}"
  
     full_text = page.evaluate("document.body.innerText") or ""
     if not full_text.strip():
-        return "Sidan verkar inte innehålla någon synlig text."
+        return "Page does not seem to contain any visible text."
  
     pattern = re.compile(re.escape(query), re.IGNORECASE)
     matches = list(pattern.finditer(full_text))
  
     if not matches:
-        return f"Ingen träff på '{query}' på sidan {url}."
+        return f"No match for '{query}' on page {url}."
  
     results = []
     for m in matches[:max_matches]:
@@ -163,7 +163,7 @@ def _search_visible_webpage_impl(page: Page, url: str, query: str, max_matches: 
     except Exception:
         pass
  
-    header = f"Hittade {len(matches)} träff(ar) på '{query}' ({url}), visar {len(results)}:\n"
+    header = f"Found {len(matches)} matches for '{query}' ({url}), showing {len(results)}:\n"
     return header + "\n---\n".join(results)
  
  
@@ -209,10 +209,10 @@ def download_file(url: str, filename: Optional[str] = None) -> str:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
     except Exception as e:
-        return f"Nedladdning misslyckades: {e}"
+        return f"Download failed: {e}"
  
     size_kb = dest.stat().st_size / 1024
-    return f"Nerladdad till {dest.relative_to(AI_FOLDER)} ({size_kb:.1f} KB)"
+    return f"Downloaded to {dest.relative_to(AI_FOLDER)} ({size_kb:.1f} KB)"
  
  
 # ---------------------------------------------------------------------------
@@ -237,11 +237,11 @@ def move_file(source: str, destination: str) -> str:
         return str(e)
  
     if not src_path.exists():
-        return f"Källfilen finns inte: {source}"
+        return f"Source file does not exist: {source}"
  
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src_path), str(dst_path))
-    return f"Flyttade {source} -> {destination}"
+    return f"Moved {source} -> {destination}"
  
  
 # ---------------------------------------------------------------------------
@@ -270,10 +270,10 @@ def _get_clickable_elements_impl(page: Page, max_items: int) -> str:
             max_items,
         )
     except Exception as e:
-        return f"Kunde inte läsa sidan: {e}"
+        return f"Could not read the page: {e}"
  
     if not items:
-        return "Inga klickbara element hittades på sidan."
+        return "No clickable elements found on the page."
     return "\n".join(items)
  
  
@@ -300,9 +300,9 @@ def _click_on_page_impl(page: Page, selector: str, use_text: bool) -> str:
         else:
             page.click(selector, timeout=10000)
         page.wait_for_timeout(500)
-        return f"Klickade på: {selector}"
+        return f"Clicked: {selector}"
     except Exception as e:
-        return f"Kunde inte klicka på '{selector}': {e}"
+        return f"Could not click '{selector}': {e}"
  
  
 @tool
@@ -329,9 +329,9 @@ def _type_into_page_impl(page: Page, selector: str, text: str, press_enter: bool
         if press_enter:
             page.press(selector, "Enter")
         page.wait_for_timeout(500)
-        return f"Skrev '{text}' i {selector}" + (" och tryckte Enter" if press_enter else "")
+        return f"Wrote '{text}' into {selector}" + (" and pressed Enter" if press_enter else "")
     except Exception as e:
-        return f"Kunde inte skriva i '{selector}': {e}"
+        return f"Could not type into '{selector}': {e}"
  
  
 @tool
@@ -361,11 +361,11 @@ def _scroll_page_impl(page: Page, direction: str, amount_px: int) -> str:
         elif direction == "bottom":
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         else:
-            return f"Okänd riktning: {direction} (använd down/up/top/bottom)"
+            return f"Unknown direction: {direction} (use down/up/top/bottom)"
         page.wait_for_timeout(300)
-        return f"Scrollade {direction}"
+        return f"Scrolled {direction}"
     except Exception as e:
-        return f"Kunde inte scrolla: {e}"
+        return f"Could not scroll: {e}"
  
  
 @tool
@@ -391,7 +391,7 @@ def _click_and_download_impl(page: Page, selector: str, use_text: bool, filename
                 page.click(selector, timeout=10000)
         download = download_info.value
     except Exception as e:
-        return f"Ingen nedladdning startade från '{selector}': {e}"
+        return f"No download started from '{selector}': {e}"
  
     save_name = os.path.basename(filename) if filename else download.suggested_filename
     dest = _safe_path(f"downloads/{save_name}")
@@ -399,7 +399,7 @@ def _click_and_download_impl(page: Page, selector: str, use_text: bool, filename
     download.save_as(str(dest))
  
     size_kb = dest.stat().st_size / 1024
-    return f"Nerladdad via klick till {dest.relative_to(AI_FOLDER)} ({size_kb:.1f} KB)"
+    return f"Downloaded via click to {dest.relative_to(AI_FOLDER)} ({size_kb:.1f} KB)"
  
  
 @tool
@@ -431,12 +431,12 @@ def _get_page_text_impl(page: Page) -> str:
         text = text.strip()
 
         if not text:
-            return "Ingen synlig text hittades på sidan."
+            return "No visible text found on the page."
 
         return text
 
     except Exception as e:
-        return f"Kunde inte läsa sidans text: {e}"
+        return f"Could not read page text: {e}"
 
 @tool
 def get_page_text() -> str:

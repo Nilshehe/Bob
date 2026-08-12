@@ -41,7 +41,7 @@ def is_speech(frame_bytes: bytes) -> bool:
 
 
 def record_utterance() -> bytes:
-    """VAD-baserad inspelning: väntar på tal, avslutar vid riktig tystnad efter tal."""
+    """VAD-based recording: waits for speech, ends after sustained silence."""
     ring_buffer = collections.deque(maxlen=10)
     triggered = False
     voiced_frames = []
@@ -78,7 +78,7 @@ def transcribe(pcm_bytes: bytes, whisper_model: WhisperModel) -> str:
     segments, _ = whisper_model.transcribe(audio_np, language=LANGUAGE, beam_size=5)
     return " ".join(seg.text.strip() for seg in segments).strip()
 
-print(f"Laddar Whisper-modell ({COMMAND_MODEL_SIZE}, svenska)...")
+print(f"Loading Whisper model ({COMMAND_MODEL_SIZE}, Swedish)...")
 WHISPER = WhisperModel(COMMAND_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
 print("Ready.")
 

@@ -41,10 +41,10 @@ _job_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("job_id", defa
 # ---------------------------------------------------------------------------
 @tool
 async def run_python(code: str) -> str:
-    """Kör Python 3-kod i en isolerad subprocess och returnerar stdout/stderr.
-    Använd det här verktyget för att testa och köra kod innan du svarar.
-    Koden måste skriva ut resultatet med print(). Om körningen misslyckas,
-    läs felmeddelandet, fixa koden och kör run_python igen."""
+    """Run Python 3 code in an isolated subprocess and return stdout/stderr.
+    Use this tool to test and run code before replying. The code must print
+    results using `print()`. If the run fails, read the error, fix the code,
+    and call `run_python` again."""
     job_id = _job_id_var.get()
     job = _jobs.get(job_id)
 
@@ -68,14 +68,14 @@ async def run_python(code: str) -> str:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
     except asyncio.TimeoutError:
         proc.kill()
-        return f"FEL: Timeout efter {EXEC_TIMEOUT}s"
+        return f"ERROR: Timeout after {EXEC_TIMEOUT}s"
 
     if proc.returncode == 0:
         if job is not None:
             job["_last_success_path"] = path
         return f"OK\n{stdout.decode('utf-8', errors='replace').strip()}"
 
-    return f"FEL (exit {proc.returncode})\n{stderr.decode('utf-8', errors='replace').strip()}"
+    return f"ERROR (exit {proc.returncode})\n{stderr.decode('utf-8', errors='replace').strip()}"
 
 
 CODE_TOOLS = [run_python]
@@ -83,13 +83,13 @@ CODE_TOOLS = [run_python]
 _code_llm = ChatOllama(model=CODE_MODEL)
 
 SYSTEM_PROMPT = (
-    "Du är en kodassistent med tillgång till verktyget run_python för att "
-    "skriva och köra Python 3-kod. Lös uppgiften genom att skriva kod, köra "
-    "den med run_python, och om körningen misslyckas -- läs felet, fixa "
-    "koden och kör run_python igen. Koden ska skriva ut resultatet med "
-    "print(). Iterera tills koden fungerar eller du är säker på att "
-    "uppgiften inte går att lösa. Avsluta alltid med ett kort svar i text "
-    "som sammanfattar resultatet -- inga markdown-headers."
+    "You are a coding assistant with access to the `run_python` tool to "
+    "write and execute Python 3 code. Solve the task by writing code, "
+    "running it with `run_python`, and if the run fails — read the error, "
+    "fix the code and run `run_python` again. The code should print results "
+    "using `print()`. Iterate until the code works or you determine the "
+    "task cannot be solved. Always finish with a short textual summary of "
+    "the result — no markdown headers."
 )
 
 _code_agent = create_agent(
@@ -113,7 +113,7 @@ threading.Thread(target=_start_bg_loop, daemon=True).start()
 
 
 def _cleanup_files(paths: list[Path], keep: Path | None) -> None:
-    """Tar bort alla skrivna filer i `paths` utom `keep` (None = ta bort alla)."""
+    """Remove all written files in `paths` except `keep` (None = remove all)."""
     for p in paths:
         if p == keep:
             continue
@@ -143,10 +143,10 @@ async def _execute_job(job_id: str, task: str) -> None:
             )
         finally:
             GPU_LOCK.release()
-    except Exception as exc:  # t.ex. recursion_limit nådd
+    except Exception as exc:  # e.g. recursion_limit reached
         job = _jobs[job_id]
         job["status"] = "failed"
-        job["result"] = f"### Fel\n```\n{exc}\n```"
+        job["result"] = f"### Error\n```\n{exc}\n```"
         _cleanup_files(job["_files"], keep=None)
         if _notify_callback:
             _notify_callback(job_id, job["result"])
@@ -159,8 +159,8 @@ async def _execute_job(job_id: str, task: str) -> None:
     keep = job["_last_success_path"]
 
     job["status"] = "done"
-    file_note = f"`{keep}`" if keep else "ingen fil sparades (inget lyckat körningssteg)"
-    job["result"] = f"### Fil\n{file_note}\n\n### Svar\n{final_text}"
+    file_note = f"`{keep}`" if keep else "no file saved (no successful run step)"
+    job["result"] = f"### File\n{file_note}\n\n### Response\n{final_text}"
 
     _cleanup_files(job["_files"], keep=keep)
     if _notify_callback:
@@ -169,25 +169,25 @@ async def _execute_job(job_id: str, task: str) -> None:
 
 @tool
 def code_ai(task: str) -> str:
-    """Startar ett bakgrundsjobb där en Ollama-agent skriver och kör Python-kod
-    (via verktyget run_python) för att lösa `task`, och itererar själv tills
-    det funkar eller den ger upp. Returnerar direkt ett job_id.
+    """Start a background job where an Ollama agent writes and runs Python
+    code (via the `run_python` tool) to solve `task`, iterating until it
+    succeeds or gives up. Returns a job_id immediately.
 
-    VIKTIGT: Jobbet kör i bakgrunden och tar tid. Svara användaren att
-    jobbet har startats och gå vidare. Du meddelas automatiskt när
-    resultatet är klart."""
+    IMPORTANT: The job runs in the background and takes time. Inform the
+    user that the job has started and continue. You will be notified when
+    the result is ready."""
     job_id = str(uuid.uuid4())[:8]
     _jobs[job_id] = {"status": "queued", "result": None}
     asyncio.run_coroutine_threadsafe(_execute_job(job_id, task), _bg_loop)
-    return f"Jobb startat: {job_id}. Kolla status med code_ai_status('{job_id}')."
+    return f"Job started: {job_id}. Check status with code_ai_status('{job_id}')."
 
 
 @tool
 def code_ai_status(job_id: str) -> str:
-    """Kollar status/resultat för ett tidigare startat code_ai-jobb."""
+    """Check status/result for a previously started code_ai job."""
     job = _jobs.get(job_id)
     if not job:
-        return f"Okänt job_id: {job_id}"
+        return f"Unknown job_id: {job_id}"
     if job["status"] in ("queued", "running"):
-        return f"Jobb {job_id}: {job['status']}..."
-    return f"Jobb {job_id} ({job['status']}):\n\n{job['result']}"
+        return f"Job {job_id}: {job['status']}..."
+    return f"Job {job_id} ({job['status']}):\n\n{job['result']}"

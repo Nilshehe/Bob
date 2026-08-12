@@ -10,51 +10,51 @@ from langgraph.checkpoint.memory import InMemorySaver
 from tools.shared_resources import GPU_LOCK
  
 APPROVAL_MODEL = "qwen3:4b"
-MAX_TURNS = 6  # tak på antal varv innan vi ger upp och avvisar säkert
- 
-# Verktygen kan bara returnera text till agenten, så vi mellanlagrar det
-# faktiska beslutet här. Rensas i början av varje ny konversation.
+MAX_TURNS = 6  # cap on number of rounds before giving up and rejecting safely
+
+# Tools can only return text to the agent, so we store the actual
+# decision here. Cleared at the start of each new conversation.
 _pending_decision: dict[str, Any] = {}
  
  
 @tool
 def approve() -> str:
-    """Godkänn den väntande åtgärden. Anropa detta ENDAST när användaren
-    tydligt har sagt att det är okej att huvud-AI:n kör åtgärden."""
+    """Approve the pending action. Call this ONLY when the user has
+    clearly indicated it is okay for the main AI to perform the action."""
     _pending_decision["type"] = "approve"
-    return "Åtgärden är godkänd."
+    return "Action approved."
  
  
 @tool
 def reject(message: str) -> str:
-    """Avvisa den väntande åtgärden. `message` ska vara en kort, tydlig
-    förklaring riktad till huvud-AI:n om varför åtgärden inte får köras,
-    så att den förstår vad den ska göra istället. Anropa detta ENDAST när
-    användaren tydligt har sagt nej / inte gett sitt godkännande."""
+    """Reject the pending action. `message` should be a short, clear
+    explanation directed to the main AI about why the action must not run,
+    so it understands what to do instead. Call this ONLY when the user
+    has explicitly said no / not given consent."""
     _pending_decision["type"] = "reject"
     _pending_decision["message"] = message
-    return "Åtgärden är avvisad."
+    return "Action rejected."
  
  
 _approval_llm = ChatOllama(model=APPROVAL_MODEL)
 _approval_memory = InMemorySaver()
  
 _SYSTEM_PROMPT = (
-    "Du representerar huvud-AI:n gentemot användaren just nu. Huvud-AI:n vill "
-    "köra ett verktyg och behöver användarens godkännande innan det får ske. "
-    "Du får veta vilket verktyg, vilka argument, och huvud-AI:ns eget "
-    "resonemang för varför den vill göra detta.\n\n"
-    "Din uppgift:\n"
-    "1. Förklara kort, med egna ord, vad huvud-AI:n vill göra och varför -- "
-    "basera dig på resonemanget du fått, hitta inte på nya skäl -- och fråga "
-    "om det är okej.\n"
-    "2. Svara på eventuella följdfrågor från användaren (t.ex. \"varför?\") "
-    "genom att luta dig mot samma resonemang.\n"
-    "3. Så fort användaren gett ett TYDLIGT svar -- godkännande eller avslag "
-    "-- anropa verktyget approve eller reject. Vid reject: skriv ett message "
-    "som förklarar för huvud-AI:n varför, baserat på vad användaren sa.\n"
-    "Fortsätt bara konversationen i textform (utan att anropa något verktyg) "
-    "om svaret ännu inte är tydligt."
+    "You are representing the main AI to the user right now. The main AI "
+    "wants to run a tool and needs the user's approval before proceeding. "
+    "You will be provided with the tool name, the arguments, and the main "
+    "AI's reasoning for why it wants to do this.\n\n"
+    "Your task:\n"
+    "1. Briefly explain, in your own words, what the main AI wants to do and "
+    "   why — base this on the reasoning you received; do not invent new reasons — "
+    "   and ask whether this is acceptable.\n"
+    "2. Answer any follow-up questions from the user (e.g. \"why?\") by "
+    "   leaning on the same reasoning.\n"
+    "3. As soon as the user has given a CLEAR response — approval or rejection — "
+    "   call the `approve` or `reject` tool. For `reject`: provide a `message` "
+    "   that explains to the main AI why, based on what the user said.\n"
+    "Continue the conversation in text only (without calling any tool) if the "
+    "response is not yet clear."
 )
  
 _approval_agent = create_agent(
@@ -66,13 +66,13 @@ _approval_agent = create_agent(
  
  
 def _stream_agent_turn(cfg: dict, msg: str) -> str:
-    """Skickar ett meddelande till godkännande-agenten och streamar svaret
-    (reasoning + text) token för token till terminalen, samma stil som
-    huvudagenten. approve()/reject() körs som vanligt internt i grafen om
-    modellen anropar dem - inget interrupt på dem, så .stream() går hela
-    vägen till slutet av det varvet automatiskt.
- 
-    Returnerar hela textsvaret (utan reasoning) som en sträng, för loggning.
+    """Send a message to the approval agent and stream the response
+    (reasoning + text) token-by-token to the terminal, same style as the
+    main agent. `approve()`/`reject()` are invoked internally in the graph if
+    the model calls them — no interrupt occurs for them, so `.stream()` runs
+    to the end of that turn automatically.
+
+    Returns the full text response (without reasoning) as a string for logging.
     """
     text_parts: list[str] = []
     printed_anything = False
@@ -113,27 +113,27 @@ def run_approval_conversation(
     get_user_reply: Callable[[str], str],
 ) -> dict:
     """
-    Kör en konversation mellan användaren och godkännande-agenten tills den
-    anropar approve() eller reject(message). Agentens svar streamas ut i
-    terminalen medan de genereras.
- 
-    get_user_reply(ai_text): funktion som hämtar nästa svar från användaren
-    (text eller transkriberad röst). ai_text skickas med ifall
-    anroparen vill logga/spela upp det, men det är redan skrivet till
-    terminalen av streamingen ovan innan get_user_reply anropas.
- 
-    Returnerar {"type": "approve"} eller {"type": "reject", "message": ...},
-    samma format som main.py redan skickar vidare till resume_after_interrupt.
+    Run a conversation between the user and the approval agent until it calls
+    `approve()` or `reject(message)`. The agent's responses are streamed to the
+    terminal as they are generated.
+
+    `get_user_reply(ai_text)`: function that obtains the next reply from the
+    user (text or transcribed voice). `ai_text` is provided in case the
+    caller wants to log/play it back, but it has already been printed to the
+    terminal by the streaming above before `get_user_reply` is called.
+
+    Returns {"type": "approve"} or {"type": "reject", "message": ...},
+    the same format that `main.py` forwards to `resume_after_interrupt`.
     """
     thread_id = f"approval_{uuid.uuid4().hex[:8]}"
     cfg = {"configurable": {"thread_id": thread_id}}
     _pending_decision.clear()
  
     msg = (
-        f"Verktyg huvud-AI:n vill köra: {tool_name}\n"
-        f"Argument: {args}\n"
-        f'Huvud-AI:ns resonemang för detta:\n"""{reasoning or "(inget resonemang tillgängligt)"}"""\n\n'
-        "Förklara detta för användaren och fråga om det är okej."
+        f"Tool the main AI wants to run: {tool_name}\n"
+        f"Arguments: {args}\n"
+        f'Main AI\'s reasoning for this:\n"""{reasoning or "(no reasoning available)"}"""\n\n'
+        "Explain this to the user and ask if it is acceptable."
     )
  
     for _ in range(MAX_TURNS):
@@ -142,9 +142,9 @@ def run_approval_conversation(
         if "type" in _pending_decision:
             return dict(_pending_decision)
  
-        msg = get_user_reply(ai_text or "(inget svar från agenten)")
+        msg = get_user_reply(ai_text or "(no reply from the agent)")
  
     return {
         "type": "reject",
-        "message": "Ingen tydlig bekräftelse från användaren efter flera försök.",
+        "message": "No clear confirmation from the user after several attempts.",
     }

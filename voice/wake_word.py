@@ -126,22 +126,22 @@ def dtw_distance(a: np.ndarray, b: np.ndarray) -> float:
 # ================= Enrollment =================
 
 def record_seconds(seconds: float) -> np.ndarray:
-    print(f"Spelar in {seconds:.1f}s...")
+    print(f"Recording {seconds:.1f}s...")
     audio = sd.rec(int(seconds * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=1, dtype="float32")
     sd.wait()
     return audio.flatten()
 
 
 def enroll():
-    print(f"Vi spelar in wake word '{WAKE_WORD_LABEL}' {N_ENROLL_SAMPLES} gånger.")
+    print(f"Recording wake word '{WAKE_WORD_LABEL}' {N_ENROLL_SAMPLES} times.")
     templates = []
     for i in range(N_ENROLL_SAMPLES):
-        input(f"Tryck Enter och säg '{WAKE_WORD_LABEL}' (inspelning {i + 1}/{N_ENROLL_SAMPLES})...")
+        input(f"Press Enter and say '{WAKE_WORD_LABEL}' (recording {i + 1}/{N_ENROLL_SAMPLES})...")
         audio = record_seconds(WAKE_WORD_DURATION_S)
         templates.append(compute_mfcc(audio))
-        print("  Inspelat.")
+        print("  Recorded.")
     np.savez(TEMPLATE_FILE, *templates)
-    print(f"Sparade {len(templates)} mallar till {TEMPLATE_FILE}")
+    print(f"Saved {len(templates)} templates to {TEMPLATE_FILE}")
 
 
 def load_templates():
@@ -153,8 +153,8 @@ def load_templates():
 
 def wait_for_wake_word(templates=None):
     """
-    Blockerar tills wake word hörs. Skriver löpande ut DTW-avstånd så
-    du ser att den lyssnar och hur nära en match är.
+    Blocks until the wake word is heard. Prints DTW distances so you can
+    observe that it is listening and how close a match is.
     """
     if templates is None:
         templates = load_templates()
@@ -187,7 +187,7 @@ def wait_for_wake_word(templates=None):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in ("enroll", "listen"):
-        print("Användning: python wake_word.py [enroll|listen]")
+        print("Usage: python wake_word.py [enroll|listen]")
         sys.exit(1)
 
     if sys.argv[1] == "enroll":
