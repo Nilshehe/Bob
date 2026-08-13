@@ -6,10 +6,13 @@ from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langchain.messages import AIMessageChunk
 from langgraph.checkpoint.memory import InMemorySaver
- 
+from funktioner.response_cleaner import get_last_text
+from funktioner.formater import formater
+from voice.tts import speak
+
 from tools.shared_resources import GPU_LOCK
  
-APPROVAL_MODEL = "qwen3:4b"
+APPROVAL_MODEL = "qwen3:4b"  # small model for approval agent, since it doesn't need to reason much
 MAX_TURNS = 6  # cap on number of rounds before giving up and rejecting safely
 
 # Tools can only return text to the agent, so we store the actual
@@ -55,6 +58,8 @@ _SYSTEM_PROMPT = (
     "   that explains to the main AI why, based on what the user said.\n"
     "Continue the conversation in text only (without calling any tool) if the "
     "response is not yet clear."
+    "Allways answer in swedish."
+    "Dont over reason, keep it short and to the point."""
 )
  
 _approval_agent = create_agent(
@@ -91,14 +96,10 @@ def _stream_agent_turn(cfg: dict, msg: str) -> str:
             if not isinstance(token, AIMessageChunk):
                 continue
  
-            for b in getattr(token, "content_blocks", None) or []:
-                if b.get("type") == "text" and b.get("text"):
-                    text_parts.append(b["text"])
-                    print(f"\033[33m{b['text']}\033[0m", end="", flush=True)
-                    printed_anything = True
-                elif b.get("type") == "reasoning" and b.get("reasoning"):
-                    print(f"\033[92m{b['reasoning']}\033[0m", end="", flush=True)
-                    printed_anything = True
+            respones, node_type = get_last_text(token, block)
+            formater(respones, node_type)
+        
+
  
     if printed_anything:
         print()  # ny rad när strömmen är klar
@@ -111,6 +112,7 @@ def run_approval_conversation(
     args: dict,
     reasoning: str,
     get_user_reply: Callable[[str], str],
+    TALKING: bool = False,
 ) -> dict:
     """
     Run a conversation between the user and the approval agent until it calls
@@ -143,6 +145,9 @@ def run_approval_conversation(
             return dict(_pending_decision)
  
         msg = get_user_reply(ai_text or "(no reply from the agent)")
+        if TALKING:
+            speak(ai_text)
+
  
     return {
         "type": "reject",

@@ -1,5 +1,5 @@
 from langchain_ollama import ChatOllama
-from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langchain.agents.middleware import HumanInTheLoopMiddleware, AgentMiddleware
 from langchain.agents import create_agent
 from langchain.messages import AIMessageChunk, ToolMessage
 from funktioner.response_cleaner import get_last_text
@@ -12,9 +12,13 @@ import queue
 from tools.shared_resources import GPU_LOCK
 from tools.code_ai import register_notify_callback
 from tools.approval_agent import run_approval_conversation
+from voice.tts import speak
+
+
 
 # sätts av chatloop() beroende på om voice mode eller text mode valdes
 VOICE_MODE = False
+TALKING = False
 
 
 #job done notifications
@@ -64,12 +68,12 @@ tools = [web_search,
         code_ai_status,
         research_ai,
         research_ai_status,
-        shutdown_ai
+        shutdown_ai,
 ]
 
 
 system_prompt = """You are a helpful assistant. Allways check if there are anny awailable skills that can help you with the task. If there are, use them. If not, try to solve the task yourself.
-"""
+Allways answer in swedish"""
 
 #config
 config = {"configurable": {"thread_id": "some_id"}}
@@ -83,8 +87,7 @@ def make_agent() -> Any:
                 "download_file": True,
                 "move_file": True,
                 "click_and_download": True,
-                "code_ai": True,
-                "create_skill": True
+                "code_ai": True
 
             })
         ],
@@ -99,7 +102,8 @@ agent = make_agent()
 def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
     with GPU_LOCK:
         for block in agent.stream(
-            {"messages": [{"role": "user", "content": msg}]},
+            {"messages": [{"role": "user", "content": msg}],
+             "plan": []},
             config=config,
             stream_mode=["updates", "messages"],
             version="v2"
@@ -176,7 +180,7 @@ def interupt_identifier(chunk, voice_mode: bool = None):
         args = req.get("args") or req.get("arguments") or {}
         reasoning = _get_last_ai_reasoning(config)
 
-        decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode))
+        decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode), TALKING)
 
         if decision["type"] == "reject":
             print(f"\033[31mRejected: {decision['message']}\033[0m")
@@ -193,7 +197,8 @@ def interupt_identifier(chunk, voice_mode: bool = None):
 #resume afeter interupt
 def resume_after_interrupt(agent, config, decision):
     for block in agent.stream(
-        Command(resume={"decisions": [decision]}),
+        Command(resume={"decisions": [decision],
+                        "plan": []}),
         config=config,
         stream_mode=["updates", "messages"],
         version="v2"
@@ -211,14 +216,15 @@ def resume_after_interrupt(agent, config, decision):
 
 
 def chatloop():
-    global VOICE_MODE
     VOICE_MODE = input("voice mode? (y/n): ").strip().lower() == "y"
+    TALKING = input("talking mode? (y/n): ").strip().lower() == "y"
     if VOICE_MODE:
         while True:
+            WORDS = []
             process_pending_notifications()
             print("\nWaiting for wake word...")
             wait_for_wake_word()
-            print("Wake word detected. Listening for command...")
+            print("Wake word detected.")
             user_input = stt_main()
             print(f"User input: {user_input}") 
             for token_data, block in main(user_input, "user123"):
@@ -227,8 +233,15 @@ def chatloop():
                     interupt_identifier(block)
                 else:
                     formater(response, node_type)
+                    if node_type == "text":
+                        WORDS.append(response)
+            if TALKING:
+                words_to_speak = " ".join(WORDS)
+                if words_to_speak:
+                    speak(words_to_speak)
     else:
         while True:
+            WORDS = []
             process_pending_notifications()
             user_input = input("\nask me anything: ")
             for token_data, block in main(user_input, "user123"):
@@ -237,6 +250,15 @@ def chatloop():
                     interupt_identifier(block)
                 else:
                     formater(response, node_type)
+                    if node_type == "text":
+                        WORDS.append(response)
+            if TALKING:
+                words_to_speak = " ".join(WORDS)
+                if words_to_speak:
+                    speak(words_to_speak)
+                
+
+            
 
 if __name__ == "__main__":
     chatloop()
