@@ -24,6 +24,7 @@ TALKING = False
 #job done notifications
 _notifications: "queue.Queue[tuple[str, str]]" = queue.Queue()
 def _on_job_done(job_id: str, result: str) -> None:
+    print(f"\n🔔 Jobb {job_id} klart!\n{result}\n")
     _notifications.put((job_id, result))
 
 register_notify_callback(_on_job_done)
@@ -99,8 +100,10 @@ def make_agent() -> Any:
 
 agent = make_agent()
     
+
 def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
-    with GPU_LOCK:
+    GPU_LOCK.acquire_interactive()
+    try:
         for block in agent.stream(
             {"messages": [{"role": "user", "content": msg}],
              "plan": []},
@@ -125,6 +128,8 @@ def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
                     yield token_data, block
             else:
                 continue
+    finally:
+        GPU_LOCK.release()
 
 def main(msg, userid):
     for token_data, block in ask(msg, agent, userid):

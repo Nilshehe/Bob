@@ -15,6 +15,17 @@ CODE_MODEL = os.environ.get("CODE_AI_MODEL", "qwen3:4b")
 EXEC_TIMEOUT = 20          # sekunder per körning av run_python
 RECURSION_LIMIT = 15       # max antal agent-steg innan vi ger upp
 
+
+class _GPULockedChatOllama(ChatOllama):
+    async def ainvoke(self, *args, **kwargs):
+        GPU_LOCK.acquire_background()
+        try:
+            return await super().ainvoke(*args, **kwargs)
+        finally:
+            GPU_LOCK.release()
+
+_code_llm = _GPULockedChatOllama(model=CODE_MODEL)
+
 WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "ai_workspace" / "code"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -131,18 +142,13 @@ async def _execute_job(job_id: str, task: str) -> None:
 
     token = _job_id_var.set(job_id)
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, GPU_LOCK.acquire)
-        try:
-            result = await _code_agent.ainvoke(
-                {"messages": [{"role": "user", "content": task}]},
-                config={
-                    "configurable": {"thread_id": f"code_ai_{job_id}"},
-                    "recursion_limit": RECURSION_LIMIT,
-                },
-            )
-        finally:
-            GPU_LOCK.release()
+        result = await _code_agent.ainvoke(
+            {"messages": [{"role": "user", "content": task}]},
+            config={
+                "configurable": {"thread_id": f"code_ai_{job_id}"},
+                "recursion_limit": RECURSION_LIMIT,
+            },
+        )
     except Exception as exc:  # e.g. recursion_limit reached
         job = _jobs[job_id]
         job["status"] = "failed"

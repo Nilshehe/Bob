@@ -82,7 +82,8 @@ def _stream_agent_turn(cfg: dict, msg: str) -> str:
     text_parts: list[str] = []
     printed_anything = False
  
-    with GPU_LOCK:
+    GPU_LOCK.acquire_interactive()
+    try:
         for block in _approval_agent.stream(
             {"messages": [{"role": "user", "content": msg}]},
             config=cfg,
@@ -92,12 +93,17 @@ def _stream_agent_turn(cfg: dict, msg: str) -> str:
             block_type = block.get("type")
             token_data = block.get("data")
             token = token_data[0] if isinstance(token_data, tuple) else token_data
- 
+
             if not isinstance(token, AIMessageChunk):
                 continue
- 
+
             respones, node_type = get_last_text(token, block)
             formater(respones, node_type)
+            if node_type == "text" and respones:
+                text_parts.append(respones)
+                printed_anything = True
+    finally:
+        GPU_LOCK.release()
         
 
  
