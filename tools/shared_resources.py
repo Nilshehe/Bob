@@ -9,7 +9,7 @@ class PriorityGPULock:
     istället för att vänta tills hela jobbet är klart.
     """
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._waiting_interactive = 0
         self._cv = threading.Condition()
 
