@@ -9,7 +9,6 @@ from typing import Any
 from voice.live_stt import stt_main
 from voice.wake_word import wait_for_wake_word
 import queue
-from tools.shared_resources import GPU_LOCK
 from tools.code_ai import register_notify_callback
 from tools.approval_agent import run_approval_conversation
 from voice.tts import speak
@@ -24,7 +23,6 @@ TALKING = False
 #job done notifications
 _notifications: "queue.Queue[tuple[str, str]]" = queue.Queue()
 def _on_job_done(job_id: str, result: str) -> None:
-    print(f"\n🔔 Jobb {job_id} klart!\n{result}\n")
     _notifications.put((job_id, result))
 
 register_notify_callback(_on_job_done)
@@ -46,7 +44,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
 
 #llm
-llm = ChatOllama(model = "Qwen3:4b", reasoning = True)
+llm = ChatOllama(model = "Qwen3:4b", reasoning = True, num_ctx=16384, num_predict=8192)
 
 #tools
 from tools.ddgs_tool import web_search
@@ -102,34 +100,28 @@ agent = make_agent()
     
 
 def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
-    GPU_LOCK.acquire_interactive()
-    try:
-        for block in agent.stream(
-            {"messages": [{"role": "user", "content": msg}],
-             "plan": []},
-            config=config,
-            stream_mode=["updates", "messages"],
-            version="v2"
-        ):
-            block_type = block.get("type")
-            token_data = block.get("data")
-            token = None
+    for block in agent.stream(
+        {
+            "messages": [{"role": "user", "content": msg}],
+            "plan": []
+        },
+        config=config,
+        stream_mode=["updates", "messages"],
+        version="v2"
+    ):
+        block_type = block.get("type")
+        token_data = block.get("data")
 
-            if isinstance(token_data, tuple):
-                token_data = token_data[0]
-                token = token_data
-            else:
-                token = token_data
+        if isinstance(token_data, tuple):
+            token = token_data[0]
+        else:
+            token = token_data
 
-            if isinstance(token, AIMessageChunk):
-                yield token, block
-            elif block_type == "updates":  
-                if "__interrupt__" in block["data"]:
-                    yield token_data, block
-            else:
-                continue
-    finally:
-        GPU_LOCK.release()
+        if isinstance(token, AIMessageChunk):
+            yield token, block
+        elif block_type == "updates":
+            if "__interrupt__" in block["data"]:
+                yield token_data, block
 
 def main(msg, userid):
     for token_data, block in ask(msg, agent, userid):

@@ -9,22 +9,13 @@ from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 
-from tools.shared_resources import GPU_LOCK
-
 CODE_MODEL = os.environ.get("CODE_AI_MODEL", "qwen3:4b")
 EXEC_TIMEOUT = 20          # sekunder per körning av run_python
 RECURSION_LIMIT = 15       # max antal agent-steg innan vi ger upp
 
 
-class _GPULockedChatOllama(ChatOllama):
-    async def ainvoke(self, *args, **kwargs):
-        GPU_LOCK.acquire_background()
-        try:
-            return await super().ainvoke(*args, **kwargs)
-        finally:
-            GPU_LOCK.release()
 
-_code_llm = _GPULockedChatOllama(model=CODE_MODEL)
+_code_llm = ChatOllama(model=CODE_MODEL)
 
 WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "ai_workspace" / "code"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
@@ -91,7 +82,6 @@ async def run_python(code: str) -> str:
 
 CODE_TOOLS = [run_python]
 
-_code_llm = ChatOllama(model=CODE_MODEL)
 
 SYSTEM_PROMPT = (
     "You are a coding assistant with access to the `run_python` tool to "

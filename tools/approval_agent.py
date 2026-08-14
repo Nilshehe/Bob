@@ -10,7 +10,6 @@ from funktioner.response_cleaner import get_last_text
 from funktioner.formater import formater
 from voice.tts import speak
 
-from tools.shared_resources import GPU_LOCK
  
 APPROVAL_MODEL = "qwen3:4b"  # small model for approval agent, since it doesn't need to reason much
 MAX_TURNS = 6  # cap on number of rounds before giving up and rejecting safely
@@ -81,29 +80,25 @@ def _stream_agent_turn(cfg: dict, msg: str) -> str:
     """
     text_parts: list[str] = []
     printed_anything = False
- 
-    GPU_LOCK.acquire_interactive()
-    try:
-        for block in _approval_agent.stream(
-            {"messages": [{"role": "user", "content": msg}]},
-            config=cfg,
-            stream_mode=["updates", "messages"],
-            version="v2",
-        ):
-            block_type = block.get("type")
-            token_data = block.get("data")
-            token = token_data[0] if isinstance(token_data, tuple) else token_data
 
-            if not isinstance(token, AIMessageChunk):
-                continue
+    for block in _approval_agent.stream(
+        {"messages": [{"role": "user", "content": msg}]},
+        config=cfg,
+        stream_mode=["updates", "messages"],
+        version="v2",
+    ):
+        block_type = block.get("type")
+        token_data = block.get("data")
+        token = token_data[0] if isinstance(token_data, tuple) else token_data
 
-            respones, node_type = get_last_text(token, block)
-            formater(respones, node_type)
-            if node_type == "text" and respones:
-                text_parts.append(respones)
-                printed_anything = True
-    finally:
-        GPU_LOCK.release()
+        if not isinstance(token, AIMessageChunk):
+            continue
+
+        respones, node_type = get_last_text(token, block)
+        formater(respones, node_type)
+        if node_type == "text" and respones:
+            text_parts.append(respones)
+            printed_anything = True
         
 
  
