@@ -368,7 +368,7 @@ class CreateModelInput(BaseModel):
         )
     )
     name: Optional[str] = Field(default=None, description="Optional filename (without extension)")
-    export_format: str = Field(default="stl", description="'stl' or 'obj'")
+    export_format: str = Field(default="stl", description="'stl', 'obj' or '3mf'")
     material: Optional[str] = Field(
         default=None,
         description="Optional material key (see list_materials) to compute mass directly.",
@@ -396,8 +396,8 @@ def create_3d_model(shape: str, dimensions: dict, name: Optional[str] = None,
     else:
         return f"Okänd form '{shape}'. Använd box, cylinder, sphere eller cone."
 
-    if export_format not in ("stl", "obj"):
-        return "export_format måste vara 'stl' eller 'obj'."
+    if export_format not in ("stl", "obj", "3mf"):
+        return "export_format måste vara 'stl', 'obj' eller '3mf'."
 
     fname = f"{name or (shape + '_' + uuid.uuid4().hex[:8])}.{export_format}"
     fpath = MODELS_DIR / fname
@@ -591,8 +591,19 @@ def test_durability(material: str, cross_section: str, dimensions: dict,
 
     cross_section = cross_section.lower().strip()
     if cross_section == "rectangular":
-        w = dimensions["width_m"]
-        h = dimensions["height_m"]
+        if "width_m" in dimensions and "height_m" in dimensions:
+            w = float(dimensions["width_m"])
+            h = float(dimensions["height_m"])
+
+        elif "width_mm" in dimensions and "height_mm" in dimensions:
+            w = float(dimensions["width_mm"]) / 1000.0
+            h = float(dimensions["height_mm"]) / 1000.0
+
+        else:
+            return (
+                "För rectangular krävs dimensions med "
+                "'width_m' + 'height_m' eller 'width_mm' + 'height_mm'."
+            )
         I = (w * h ** 3) / 12.0
         c = h / 2.0
         A = w * h
@@ -844,22 +855,46 @@ class CompareMaterialsInput(BaseModel):
 
 
 @tool("compare_materials_durability", args_schema=CompareMaterialsInput)
-def compare_materials_durability(materials: list[str], cross_section: str, dimensions: dict,
-                                  length_m: float, load_n: float, environment: str = "normal") -> str:
+def compare_materials_durability(
+    materials: list[str],
+    cross_section: str,
+    dimensions: dict,
+    length_m: float,
+    load_n: float,
+    environment: str = "normal"
+) -> str:
     """Kör test_durability för flera material på samma geometri/last/miljö
     och returnera en jämförelsetabell, sorterad efter säkerhetsfaktor."""
+
+    if cross_section.lower() == "rectangular":
+        if "width_mm" in dimensions and "height_mm" in dimensions:
+            dimensions = {
+                "width_m": float(dimensions["width_mm"]) / 1000,
+                "height_m": float(dimensions["height_mm"]) / 1000,
+            }
+
     results = []
+
     for m in materials:
         raw = test_durability.invoke({
-            "material": m, "cross_section": cross_section, "dimensions": dimensions,
-            "length_m": length_m, "load_n": load_n, "environment": environment,
+            "material": m,
+            "cross_section": cross_section,
+            "dimensions": dimensions,
+            "length_m": length_m,
+            "load_n": load_n,
+            "environment": environment,
         })
+
         try:
             results.append(json.loads(raw))
         except json.JSONDecodeError:
             results.append({"material": m, "error": raw})
 
-    results.sort(key=lambda r: r.get("safety_factor", -1), reverse=True)
+    results.sort(
+        key=lambda r: r.get("stress_analysis", {}).get("safety_factor", -1),
+        reverse=True
+    )
+
     return json.dumps(results, indent=2, ensure_ascii=False)
 
 

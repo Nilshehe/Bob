@@ -44,7 +44,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
 
 #llm
-llm = ChatOllama(model = "Qwen3:4b", reasoning = True, num_ctx=16384, num_predict=8192)
+llm = ChatOllama(model = "Qwen3:4b", reasoning = True, num_ctx=8192, num_predict=8192)
 
 #tools
 from tools.ddgs_tool import web_search
@@ -52,6 +52,8 @@ from tools.sok_visible import search_visible_webpage, download_file, move_file, 
 from tools.code_ai import code_ai, code_ai_status
 from tools.research_ai import research_ai, research_ai_status
 from tools.quit import shutdown_ai
+from tools.model3d_tools import get_tools as get_model3d_tools
+from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -68,6 +70,8 @@ tools = [web_search,
         research_ai,
         research_ai_status,
         shutdown_ai,
+        *get_model3d_tools(),
+        *get_model3d_complex_tools()
 ]
 
 
@@ -86,7 +90,11 @@ def make_agent() -> Any:
                 "download_file": True,
                 "move_file": True,
                 "click_and_download": True,
-                "code_ai": True
+                "code_ai": True,
+                "research_ai": True,
+                "download_material": True,
+                "download_reference_shape": True,
+
 
             })
         ],
