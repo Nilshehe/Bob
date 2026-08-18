@@ -4,6 +4,7 @@ import uuid
 import threading
 import contextvars
 from pathlib import Path
+from tools.memory_tools import recall
 
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
@@ -80,7 +81,7 @@ async def run_python(code: str) -> str:
     return f"ERROR (exit {proc.returncode})\n{stderr.decode('utf-8', errors='replace').strip()}"
 
 
-CODE_TOOLS = [run_python]
+CODE_TOOLS = [run_python, recall]
 
 
 SYSTEM_PROMPT = (

@@ -56,6 +56,7 @@ from tools.research_ai import research_ai, research_ai_status
 from tools.quit import shutdown_ai
 from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
+from tools.memory_tools import remember, recall
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -74,6 +75,8 @@ tools = [web_search,
         shutdown_ai,
 #        *get_model3d_tools(),
 #        *get_model3d_complex_tools()
+        remember,
+        recall
 ]
 
 
@@ -88,6 +91,8 @@ You may receive relevant long-term memories about the user.
 Use them when they are relevant to the current request.
 Do not mention the memory system unless the user asks about it.
 Do not assume a memory is correct if the current user message contradicts it.
+Allways check memory for relevant information before using tools or answering questions.
+Använd alltid användarens namn
 """
 #config
 config = {"configurable": {"thread_id": "some_id"}}
