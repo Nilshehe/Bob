@@ -56,7 +56,7 @@ from shapely.ops import unary_union
 # Konfiguration / lagringsplatser
 # --------------------------------------------------------------------------- #
 
-BASE_DIR = Path(os.environ.get("ai_workspace", Path.home() / ".model3d_tools"))
+BASE_DIR = Path(r"D:\Nils\Bob\ai_workspace\3d_modeler")
 MODELS_DIR = BASE_DIR / "models"
 RENDERS_DIR = BASE_DIR / "renders"
 MATERIALS_FILE = BASE_DIR / "materials.json"

@@ -15,6 +15,8 @@ from voice.tts import speak
 
 
 
+
+
 # sätts av chatloop() beroende på om voice mode eller text mode valdes
 VOICE_MODE = False
 TALKING = False
@@ -70,14 +72,23 @@ tools = [web_search,
         research_ai,
         research_ai_status,
         shutdown_ai,
-        *get_model3d_tools(),
-        *get_model3d_complex_tools()
+#        *get_model3d_tools(),
+#        *get_model3d_complex_tools()
 ]
 
 
-system_prompt = """You are a helpful assistant. Allways check if there are anny awailable skills that can help you with the task. If there are, use them. If not, try to solve the task yourself.
-Allways answer in swedish"""
+system_prompt = """You are a helpful assistant.
 
+Always check if there are any available skills that can help you with the task.
+If there are, use them. If not, try to solve the task yourself.
+
+Always answer in Swedish.
+
+You may receive relevant long-term memories about the user.
+Use them when they are relevant to the current request.
+Do not mention the memory system unless the user asks about it.
+Do not assume a memory is correct if the current user message contradicts it.
+"""
 #config
 config = {"configurable": {"thread_id": "some_id"}}
 
@@ -137,6 +148,7 @@ def main(msg, userid):
             yield token_data, block
         else:
             continue
+
 
 
 
@@ -202,8 +214,7 @@ def interupt_identifier(chunk, voice_mode: bool = None):
 #resume afeter interupt
 def resume_after_interrupt(agent, config, decision):
     for block in agent.stream(
-        Command(resume={"decisions": [decision],
-                        "plan": []}),
+        Command(resume={"decisions": [decision]}),
         config=config,
         stream_mode=["updates", "messages"],
         version="v2"
@@ -221,8 +232,16 @@ def resume_after_interrupt(agent, config, decision):
 
 
 def chatloop():
-    VOICE_MODE = input("voice mode? (y/n): ").strip().lower() == "y"
-    TALKING = input("talking mode? (y/n): ").strip().lower() == "y"
+    global VOICE_MODE, TALKING
+
+    VOICE_MODE = input(
+        "voice mode? (y/n): "
+    ).strip().lower() == "y"
+
+    TALKING = input(
+        "talking mode? (y/n): "
+    ).strip().lower() == "y"
+
     if VOICE_MODE:
         while True:
             WORDS = []
@@ -231,34 +250,63 @@ def chatloop():
             wait_for_wake_word()
             print("Wake word detected.")
             user_input = stt_main()
-            print(f"User input: {user_input}") 
-            for token_data, block in main(user_input, "user123"):
-                response, node_type = get_last_text(token_data, block)
+
+            print(f"User input: {user_input}")
+
+            for token_data, block in main(
+                user_input,
+                "user123"
+            ):
+                response, node_type = get_last_text(
+                    token_data,
+                    block
+                )
+
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    formater(
+                        response,
+                        node_type
+                    )
                     if node_type == "text":
                         WORDS.append(response)
+
             if TALKING:
                 words_to_speak = " ".join(WORDS)
+
                 if words_to_speak:
                     speak(words_to_speak)
+
     else:
         while True:
             WORDS = []
             process_pending_notifications()
-            user_input = input("\nask me anything: ")
-            for token_data, block in main(user_input, "user123"):
-                response, node_type = get_last_text(token_data, block)
+            user_input = input(
+                "\nask me anything: "
+            )
+            for token_data, block in main(
+                user_input,
+                "user123"
+            ):
+                response, node_type = get_last_text(
+                    token_data,
+                    block
+                )
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    formater(
+                        response,
+                        node_type
+                    )
+
                     if node_type == "text":
                         WORDS.append(response)
+
             if TALKING:
                 words_to_speak = " ".join(WORDS)
+
                 if words_to_speak:
                     speak(words_to_speak)
                 
