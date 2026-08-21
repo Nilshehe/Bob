@@ -263,6 +263,8 @@ async def _execute_job(job_id: str, task: str) -> None:
         f"Research file: {new_path}\n\n"
         f"Summary:\n{final_message}"
     )
+    if _notify_callback:
+        _notify_callback(job_id, job["result"])
 
     if _notify_callback:
         _notify_callback(job_id, job["result"])

@@ -8,13 +8,44 @@ from langgraph.types import Command
 from typing import Any
 from voice.live_stt import stt_main
 from voice.wake_word import wait_for_wake_word
-import queue
 from tools.code_ai import register_notify_callback
+from tools.research_ai import register_notify_callback as register_research_notify_callback
 from tools.approval_agent import run_approval_conversation
 from voice.tts import speak
+import asyncio
+from funktioner.queue import event_queue
+
+event_loop_instance = None
+
+def _on_code_job_done(job_id: str, result: str) -> None:
+    if event_loop_instance is None:
+        return
+
+    asyncio.run_coroutine_threadsafe(
+        event_queue.put({
+            "type": "code_ai_finished",
+            "job_id": job_id,
+            "result": result
+        }),
+        event_loop_instance
+    )
+def _on_research_job_done(job_id: str, result: str) -> None:
+    if event_loop_instance is None:
+        return
+
+    asyncio.run_coroutine_threadsafe(
+        event_queue.put({
+            "type": "research_ai_finished",
+            "job_id": job_id,
+            "result": result
+        }),
+        event_loop_instance
+    )
 
 
 
+register_notify_callback(_on_code_job_done)
+register_research_notify_callback(_on_research_job_done)
 
 
 # sätts av chatloop() beroende på om voice mode eller text mode valdes
@@ -22,23 +53,6 @@ VOICE_MODE = False
 TALKING = False
 
 
-#job done notifications
-_notifications: "queue.Queue[tuple[str, str]]" = queue.Queue()
-def _on_job_done(job_id: str, result: str) -> None:
-    _notifications.put((job_id, result))
-
-register_notify_callback(_on_job_done)
-
-def process_pending_notifications():
-    """Anropa i toppen av while-loopen i chatloop(), innan input()."""
-    while not _notifications.empty():
-        job_id, result = _notifications.get_nowait()
-        for token_data, block in main(f"THIS IS A AUTIOMATIC MESSAGE: async job with job id {job_id} is finished", "user123"):
-            response, node_type = get_last_text(token_data, block)
-            if node_type == "interrupt":
-                interupt_identifier(block)
-            else:
-                formater(response, node_type)
 
 
 #memory
@@ -56,7 +70,6 @@ from tools.research_ai import research_ai, research_ai_status
 from tools.quit import shutdown_ai
 from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
-from tools.memory_tools import remember, recall
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -75,8 +88,6 @@ tools = [web_search,
         shutdown_ai,
 #        *get_model3d_tools(),
 #        *get_model3d_complex_tools()
-        remember,
-        recall
 ]
 
 
@@ -123,8 +134,8 @@ def make_agent() -> Any:
 agent = make_agent()
     
 
-def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
-    for block in agent.stream(
+async def ask(msg: str, agent: Any, user_id: str = "user"):
+    async for block in agent.astream(
         {
             "messages": [{"role": "user", "content": msg}],
             "plan": []
@@ -143,17 +154,15 @@ def ask(msg: str, agent: Any, user_id: str = "user") -> Any:
 
         if isinstance(token, AIMessageChunk):
             yield token, block
+
         elif block_type == "updates":
             if "__interrupt__" in block["data"]:
                 yield token_data, block
 
-def main(msg, userid):
-    for token_data, block in ask(msg, agent, userid):
+async def main(msg, userid):
+    async for token_data, block in ask(msg, agent, userid):
         if token_data:
             yield token_data, block
-        else:
-            continue
-
 
 
 
@@ -236,87 +245,148 @@ def resume_after_interrupt(agent, config, decision):
             continue
 
 
-def chatloop():
-    global VOICE_MODE, TALKING
 
-    VOICE_MODE = input(
-        "voice mode? (y/n): "
-    ).strip().lower() == "y"
+async def input_loop():
+    global VOICE_MODE
 
-    TALKING = input(
-        "talking mode? (y/n): "
-    ).strip().lower() == "y"
+    while True:
+        await INPUT_ENABLED.wait()
 
-    if VOICE_MODE:
-        while True:
-            WORDS = []
-            process_pending_notifications()
+        if VOICE_MODE:
             print("\nWaiting for wake word...")
-            wait_for_wake_word()
-            print("Wake word detected.")
-            user_input = stt_main()
+            await asyncio.to_thread(wait_for_wake_word)
 
+            print("Wake word detected.")
+            user_input = await asyncio.to_thread(stt_main)
             print(f"User input: {user_input}")
 
-            for token_data, block in main(
-                user_input,
-                "user123"
-            ):
-                response, node_type = get_last_text(
-                    token_data,
-                    block
-                )
-
-                if node_type == "interrupt":
-                    interupt_identifier(block)
-                else:
-                    formater(
-                        response,
-                        node_type
-                    )
-                    if node_type == "text":
-                        WORDS.append(response)
-
-            if TALKING:
-                words_to_speak = " ".join(WORDS)
-
-                if words_to_speak:
-                    speak(words_to_speak)
-
-    else:
-        while True:
-            WORDS = []
-            process_pending_notifications()
-            user_input = input(
+        else:
+            user_input = await asyncio.to_thread(
+                input,
                 "\nask me anything: "
             )
-            for token_data, block in main(
-                user_input,
+
+        INPUT_ENABLED.clear()
+
+        await event_queue.put({
+            "type": "user_message",
+            "content": user_input
+        })
+                
+
+async def event_loop():
+    while True:
+        event = await event_queue.get()
+
+        if event["type"] == "user_message":
+            WORDS = []
+
+            async for token_data, block in main(
+                event["content"],
                 "user123"
             ):
                 response, node_type = get_last_text(
                     token_data,
                     block
                 )
+
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(
-                        response,
-                        node_type
-                    )
+                    formater(response, node_type)
 
-                    if node_type == "text":
+                    if node_type == "text" and response:
                         WORDS.append(response)
 
             if TALKING:
                 words_to_speak = " ".join(WORDS)
 
                 if words_to_speak:
-                    speak(words_to_speak)
-                
+                    await asyncio.to_thread(
+                        speak,
+                        words_to_speak
+                    )
+                    INPUT_ENABLED.set()
 
-            
+        elif event["type"] == "code_ai_finished":
+            WORDS = []
+
+            async for token_data, block in main(
+                f"THIS IS AN AUTOMATIC MESSAGE: "
+                f"async job with job id {event['job_id']} is finished. "
+                f"Result: {event['result']}",
+                "user123"
+            ):
+                response, node_type = get_last_text(
+                    token_data,
+                    block
+                )
+
+                if node_type == "interrupt":
+                    interupt_identifier(block)
+                else:
+                    formater(response, node_type)
+
+                    if node_type == "text" and response:
+                        WORDS.append(response)
+
+            if TALKING:
+                words_to_speak = " ".join(WORDS)
+
+                if words_to_speak:
+                    await asyncio.to_thread(
+                        speak,
+                        words_to_speak
+                    )
+            INPUT_ENABLED.set()
+
+        elif event["type"] == "research_ai_finished":
+            WORDS = []
+
+            async for token_data, block in main(
+                f"THIS IS AN AUTOMATIC MESSAGE: "
+                f"research job with id {event['job_id']} is finished. "
+                f"Result: {event['result']}",
+                "user123"
+            ):
+                response, node_type = get_last_text(
+                    token_data,
+                    block
+                )
+
+                if node_type == "interrupt":
+                    interupt_identifier(block)
+                else:
+                    formater(response, node_type)
+
+                    if node_type == "text" and response:
+                        WORDS.append(response)
+
+            if TALKING:
+                words_to_speak = " ".join(WORDS)
+
+                if words_to_speak:
+                    await asyncio.to_thread(
+                        speak,
+                        words_to_speak
+                    )
+
+async def app():
+    global event_loop_instance
+
+    event_loop_instance = asyncio.get_running_loop()
+
+    INPUT_ENABLED.set()
+
+    await asyncio.gather(
+        input_loop(),
+        event_loop(),
+    )
+
 
 if __name__ == "__main__":
-    chatloop()
+    VOICE_MODE = input("voice mode? (y/n): ").strip().lower() == "y"
+    TALKING = input("talking mode? (y/n): ").strip().lower() == "y"
+    INPUT_ENABLED = asyncio.Event()
+
+    asyncio.run(app())
