@@ -10,6 +10,7 @@ from voice.live_stt import stt_main
 from voice.wake_word import wait_for_wake_word
 from tools.code_ai import register_notify_callback
 from tools.research_ai import register_notify_callback as register_research_notify_callback
+from tools.edit_ai import register_notify_callback as register_edit_notify_callback
 from tools.approval_agent import run_approval_conversation
 from voice.tts import speak
 import asyncio
@@ -41,11 +42,24 @@ def _on_research_job_done(job_id: str, result: str) -> None:
         }),
         event_loop_instance
     )
+def _on_edit_job_done(job_id: str, result: str) -> None:
+    if event_loop_instance is None:
+        return
+
+    asyncio.run_coroutine_threadsafe(
+        event_queue.put({
+            "type": "edit_ai_finished",
+            "job_id": job_id,
+            "result": result
+        }),
+        event_loop_instance
+    )
 
 
 
 register_notify_callback(_on_code_job_done)
 register_research_notify_callback(_on_research_job_done)
+register_edit_notify_callback(_on_edit_job_done)
 
 
 # sätts av chatloop() beroende på om voice mode eller text mode valdes
@@ -70,6 +84,7 @@ from tools.research_ai import research_ai, research_ai_status
 from tools.quit import shutdown_ai
 from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
+from tools.edit_ai import edit_ai, edit_ai_status, apply_edit_files
 tools = [web_search,
         search_visible_webpage, 
         download_file, 
@@ -86,12 +101,15 @@ tools = [web_search,
         research_ai,
         research_ai_status,
         shutdown_ai,
+        edit_ai,
+        edit_ai_status,
+        apply_edit_files
 #        *get_model3d_tools(),
 #        *get_model3d_complex_tools()
 ]
 
 
-system_prompt = """You are a helpful assistant.
+system_prompt = """You are BOB a helpful assistant.
 
 Always check if there are any available skills that can help you with the task.
 If there are, use them. If not, try to solve the task yourself.
@@ -103,7 +121,6 @@ Use them when they are relevant to the current request.
 Do not mention the memory system unless the user asks about it.
 Do not assume a memory is correct if the current user message contradicts it.
 Allways check memory for relevant information before using tools or answering questions.
-Använd alltid användarens namn
 """
 #config
 config = {"configurable": {"thread_id": "some_id"}}
@@ -121,6 +138,7 @@ def make_agent() -> Any:
                 "research_ai": True,
                 "download_material": True,
                 "download_reference_shape": True,
+                "apply_edit_files": True,
 
 
             })
@@ -306,7 +324,7 @@ async def event_loop():
                         speak,
                         words_to_speak
                     )
-                    INPUT_ENABLED.set()
+            INPUT_ENABLED.set()
 
         elif event["type"] == "code_ai_finished":
             WORDS = []
@@ -370,6 +388,38 @@ async def event_loop():
                         speak,
                         words_to_speak
                     )
+        elif event["type"] == "edit_ai_finished":
+            WORDS = []
+
+            async for token_data, block in main(
+                f"THIS IS AN AUTOMATIC MESSAGE: "
+                f"edit job with id {event['job_id']} is finished. "
+                f"Result: {event['result']}",
+                "user123"
+            ):
+                response, node_type = get_last_text(
+                    token_data,
+                    block
+                )
+
+                if node_type == "interrupt":
+                    interupt_identifier(block)
+                else:
+                    formater(response, node_type)
+
+                    if node_type == "text" and response:
+                        WORDS.append(response)
+
+            if TALKING:
+                words_to_speak = " ".join(WORDS)
+
+                if words_to_speak:
+                    await asyncio.to_thread(
+                        speak,
+                        words_to_speak
+                    )
+
+            INPUT_ENABLED.set()
 
 async def app():
     global event_loop_instance
