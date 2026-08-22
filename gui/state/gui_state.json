@@ -15,33 +15,23 @@
     }
   },
   "elements": {
-    "status_c7e9a9": {
-      "type": "status",
-      "window_id": "main",
-      "x": 389,
-      "y": 156,
-      "w": 695,
-      "h": 224,
-      "label": "AI STATUS",
-      "visible": true,
-      "props": {}
-    },
-    "voice_button": {
-      "type": "button",
-      "window_id": "2d5eef19",
-      "x": 1100,
-      "y": 1880,
-      "w": 100,
-      "h": 40,
-      "label": "Voice Mode Control",
-      "visible": true,
-      "props": {}
-    },
     "ai_status": {
-      "w": 80,
-      "h": 20,
+      "w": 40,
+      "h": 40,
       "x": 0,
-      "y": 0
+      "y": 0,
+      "visible": true
+    },
+    "voice_mode_button": {
+      "type": "button",
+      "window_id": "main",
+      "x": 100,
+      "y": 103,
+      "w": 344,
+      "h": 74,
+      "label": "off",
+      "visible": true,
+      "props": {}
     }
   }
 }

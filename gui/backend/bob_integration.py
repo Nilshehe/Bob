@@ -56,18 +56,27 @@ def get_langchain_tools():
 
         def _make(spec=spec):
             def _run(**kwargs):
-                result = ToolRegistry.call(
-                    spec.name,
-                    **kwargs
-                )
+                try:
+                    result = ToolRegistry.call(
+                        spec.name,
+                        **kwargs
+                    )
 
-                if isinstance(result, str):
-                    return result
+                    if isinstance(result, str):
+                        return result
 
-                return json.dumps(
-                    result,
-                    ensure_ascii=False
-                )
+                    return json.dumps(
+                        result,
+                        ensure_ascii=False
+                    )
+
+                except Exception as e:
+                    return (
+                        f"GUI TOOL ERROR\n"
+                        f"Tool: {spec.name}\n"
+                        f"Error: {type(e).__name__}\n"
+                        f"Message: {e}"
+                    )
 
             return _run
 

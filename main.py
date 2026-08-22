@@ -17,7 +17,7 @@ import asyncio
 import threading
 from funktioner.queue import event_queue
 from gui.backend.registry import ToolRegistry
-from gui.backend.main import launch_gui
+from gui.backend.main_gui import launch_gui
 
 event_loop_instance = None
 
