@@ -4,14 +4,6 @@
       "title": "Bob",
       "w": 1000,
       "h": 650
-    },
-    "2d5eef19": {
-      "title": "Voice Control GUI",
-      "x": 0,
-      "y": 0,
-      "w": 1200,
-      "h": 1920,
-      "screen": 0
     }
   },
   "elements": {
@@ -25,13 +17,27 @@
     "voice_mode_button": {
       "type": "button",
       "window_id": "main",
-      "x": 100,
-      "y": 103,
+      "x": 27,
+      "y": 18,
       "w": 344,
       "h": 74,
       "label": "off",
-      "visible": true,
+      "visible": false,
       "props": {}
+    },
+    "voice_toggle": {
+      "type": "toggle",
+      "window_id": "main_window",
+      "x": 100,
+      "y": 100,
+      "w": 150,
+      "h": 30,
+      "label": "Voice Mode",
+      "visible": true,
+      "props": {
+        "variable": "Voice Mode",
+        "value": false
+      }
     }
   }
 }

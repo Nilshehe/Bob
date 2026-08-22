@@ -148,7 +148,9 @@ def _normalize_model_path(model_path):
 # ---------------------------------------------------------------------
 
 @tool(
-    "Skapa ett nytt GUI-element (text, button, panel, status, input eller 3d) i ett fönster.",
+    "Skapa ett nytt GUI-element (text, button, panel, status, input, 3d "
+    "eller toggle) i ett fönster. För toggle-knappar som visar/ändrar en "
+    "variabel, använd hellre create_toggle_button.",
     parameters={
         "element_type": {
             "type": "string",
@@ -159,6 +161,7 @@ def _normalize_model_path(model_path):
                 "status",
                 "input",
                 "3d",
+                "toggle",
             ],
         },
         "window_id": {
@@ -215,6 +218,83 @@ def create_element(
 
     return {
         "element_id": element_id
+    }
+
+
+@tool(
+    "Skapa en knapp som visar aktuellt värde för en registrerad variabel "
+    "(t.ex. 'Voice Mode') och byter värdet (true/false) varje gång "
+    "användaren klickar på den. Variabeln måste vara läsbar och skrivbar "
+    "(se list_variables/systemprompten för vilka som finns).",
+    parameters={
+        "variable_name": {
+            "type": "string",
+            "description": "Namnet på en registrerad variabel, t.ex. 'Voice Mode'",
+        },
+        "window_id": {
+            "type": "string",
+            "description": "Vilket fönster knappen ska skapas i",
+        },
+        "x": {"type": "integer"},
+        "y": {"type": "integer"},
+        "w": {"type": "integer"},
+        "h": {"type": "integer"},
+        "label": {
+            "type": "string",
+            "description": "Etikett ovanför knappen, annars används variabelns namn",
+        },
+        "element_id": {
+            "type": "string",
+            "description": "Valfritt eget id, annars genereras ett",
+        },
+    },
+    required=["variable_name", "window_id"],
+)
+def create_toggle_button(
+    variable_name,
+    window_id,
+    x=40,
+    y=40,
+    w=160,
+    h=60,
+    label=None,
+    element_id=None,
+):
+    from gui.backend.registry import ToolRegistry
+
+    # Kastar ValueError om variabeln inte finns eller inte är läsbar -
+    # låter Bob se felet istället för att skapa en knapp som inte funkar.
+    current_value = ToolRegistry.get_variable(variable_name)
+
+    element_id = (
+        element_id
+        or f"toggle_{uuid.uuid4().hex[:6]}"
+    )
+
+    state.upsert_element(
+        element_id,
+        type="toggle",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label or variable_name,
+        visible=True,
+        props={
+            "variable": variable_name,
+            "value": bool(current_value),
+        },
+    )
+
+    _send_create_element(
+        window_id,
+        element_id,
+    )
+
+    return {
+        "element_id": element_id,
+        "value": bool(current_value),
     }
 
 

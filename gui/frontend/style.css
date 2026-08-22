@@ -59,6 +59,22 @@ html, body {
   border-bottom: 1px solid var(--holo-blue); color: var(--holo-blue); font-family: inherit;
 }
 
+.gui-element.type-toggle .body {
+  display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+}
+.gui-element.type-toggle:active .body { background: rgba(0, 234, 255, 0.2); }
+.gui-element.type-toggle .dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(0, 234, 255, 0.15); box-shadow: none;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.gui-element.type-toggle .dot.on {
+  background: var(--holo-blue); box-shadow: 0 0 8px var(--holo-blue);
+}
+.gui-element.type-toggle .toggle-text {
+  letter-spacing: 1px; font-size: 12px;
+}
+
 .gui-element.type-3d .body { padding: 0; }
 .gui-element.type-3d canvas { width: 100%; height: 100%; display: block; }
 

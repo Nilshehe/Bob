@@ -345,6 +345,39 @@ function buildBody(
   }
 
 
+  else if (type === "toggle") {
+
+    const dot =
+      document.createElement("span");
+
+    dot.className = "dot";
+
+    const text =
+      document.createElement("span");
+
+    text.className = "toggle-text";
+
+    text.textContent =
+      formatToggleValue(props.value);
+
+    body.appendChild(dot);
+    body.appendChild(text);
+
+    setToggleDotState(dot, props.value);
+
+    body.parentElement.addEventListener(
+      "click",
+      () => {
+        sendEvent({
+          type: "element_clicked",
+          element_id: id,
+        });
+      }
+    );
+
+  }
+
+
   else if (
     type === "text" ||
     type === "panel"
@@ -353,6 +386,70 @@ function buildBody(
     body.textContent =
       props.text || "";
 
+  }
+}
+
+
+// ---------------------------------------------------------------------
+// Toggle
+// ---------------------------------------------------------------------
+
+function formatToggleValue(value) {
+  return value ? "PÅ" : "AV";
+}
+
+
+function setToggleDotState(dotEl, value) {
+  dotEl.classList.toggle(
+    "on",
+    !!value
+  );
+}
+
+
+function applyToggleProps(id, props) {
+  const e =
+    elements[id];
+
+  if (!e) {
+    return;
+  }
+
+  const body =
+    e.dom.querySelector(
+      ".body"
+    );
+
+  if (!body) {
+    return;
+  }
+
+  const dot =
+    body.querySelector(
+      ".dot"
+    );
+
+  const text =
+    body.querySelector(
+      ".toggle-text"
+    );
+
+  if (props.value === undefined) {
+    return;
+  }
+
+  if (dot) {
+    setToggleDotState(
+      dot,
+      props.value
+    );
+  }
+
+  if (text) {
+    text.textContent =
+      formatToggleValue(
+        props.value
+      );
   }
 }
 
@@ -460,6 +557,17 @@ function updateElementDom(
     e.type === "3d"
   ) {
     apply3DProps(
+      id,
+      fields.props
+    );
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "toggle"
+  ) {
+    applyToggleProps(
       id,
       fields.props
     );

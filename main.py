@@ -104,6 +104,23 @@ tools = [
     # *get_model3d_complex_tools()
     *gui_tools
 ]
+#gui variabler
+def _set_voice_mode(state: bool):
+    global VOICE_MODE
+    VOICE_MODE = bool(state)
+    return f"VOICE MODE is now {'on' if VOICE_MODE else 'off'}"
+
+def _get_voice_mode():
+    return VOICE_MODE
+
+ToolRegistry.variable(
+    "Voice Mode",
+    "if voice is on or off.",
+    readable=True,
+    writable=True,
+    getter=_get_voice_mode,
+    setter=_set_voice_mode
+)
 
 system_prompt = """You are BOB a helpful assistant.
 
@@ -342,22 +359,7 @@ async def app():
         event_loop(input_enabled),
     )
 
-def _set_voice_mode(state: bool):
-    global VOICE_MODE
-    VOICE_MODE = bool(state)
-    return f"VOICE MODE is now {'on' if VOICE_MODE else 'off'}"
 
-def _get_voice_mode():
-    return VOICE_MODE
-
-ToolRegistry.variable(
-    "Voice Mode",
-    "if voice is on or off.",
-    readable=True,
-    writable=True,
-    getter=_get_voice_mode,
-    setter=_set_voice_mode
-)
 
 def run_bob():
     asyncio.run(app())

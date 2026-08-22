@@ -64,9 +64,25 @@ all_tools = [*existing_bob_tools, *gui_tools]
 
 Bob:s LLM ser nu verktygen `create_element`, `remove_element`,
 `move_element`, `update_element`, `create_window`, `move_window`,
-`close_window`, `get_screens`, `load_3d_model`, `move_3d_model` och
-`set_3d_model_style` – med scheman genererade direkt från
-`registry.py`, redo för Ollamas function-calling.
+`close_window`, `get_screens`, `load_3d_model`, `move_3d_model`,
+`set_3d_model_style` och `create_toggle_button` – med scheman genererade
+direkt från `registry.py`, redo för Ollamas function-calling.
+
+### Toggle-knappar (status + ändra en variabel)
+
+`create_toggle_button(variable_name, window_id, ...)` skapar en knapp som
+visar en registrerad variabels aktuella värde (PÅ/AV) och byter den varje
+gång användaren klickar. Kräver att variabeln är registrerad med
+`readable=True, writable=True` (se `main.py`:s `Voice Mode`-exempel).
+
+```python
+create_toggle_button(variable_name="Voice Mode", window_id="main", x=40, y=120)
+```
+
+Klicket hanteras helt i `gui_server.py` (`_handle_element_clicked`):
+värdet läses via `ToolRegistry.get_variable`, inverteras och skrivs
+tillbaka via `ToolRegistry.set_variable`, sedan broadcastas det nya
+värdet ner till frontend som en `update_element`.
 
 ### Exempel-flöde
 

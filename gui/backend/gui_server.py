@@ -91,5 +91,43 @@ def _handle_event(window_id: str, msg: dict):
     elif mtype == "element_resized":
         state.upsert_element(msg["element_id"], w=msg["w"], h=msg["h"])
     elif mtype == "element_clicked":
-        # Här kan du t.ex. lägga en kö som Bob pollar, eller trigga en callback.
-        pass
+        _handle_element_clicked(window_id, msg.get("element_id"))
+
+
+def _handle_element_clicked(window_id: str, element_id: str):
+    """Klick på ett GUI-element. Just nu bara relevant för toggle-knappar
+    (bundna till en variabel via create_toggle_button) - allt annat
+    ignoreras tills vidare."""
+    if not element_id:
+        return
+
+    el = state.get_element(element_id)
+    if not el or el.get("type") != "toggle":
+        return
+
+    var_name = el.get("props", {}).get("variable")
+    if not var_name:
+        return
+
+    from gui.backend.registry import ToolRegistry
+
+    try:
+        current_value = ToolRegistry.get_variable(var_name)
+        new_value = not bool(current_value)
+        ToolRegistry.set_variable(var_name, new_value)
+    except ValueError:
+        # Okänd eller icke skrivbar variabel - ignorera klicket istället
+        # för att krascha websocket-hanteraren.
+        return
+
+    props = {**el.get("props", {}), "value": new_value}
+    state.upsert_element(element_id, props=props)
+
+    manager.send(
+        window_id,
+        {
+            "type": "update_element",
+            "element_id": element_id,
+            "props": props,
+        },
+    )
