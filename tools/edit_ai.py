@@ -22,9 +22,6 @@ MAX_READ_BYTES = 200_000  # skydd mot att en enda fil svämmar över kontexten
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_DIR = PROJECT_ROOT / "ai_workspace" / "edit_ai"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
-print(f"[EDIT AI] PROJECT_ROOT = {PROJECT_ROOT}")
-print(f"[EDIT AI] WORKSPACE_DIR = {WORKSPACE_DIR}")
-
 
 # Kataloger/mönster som aldrig ska listas, läsas eller skrivas till
 IGNORE_DIRS = {
