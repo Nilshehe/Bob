@@ -18,6 +18,7 @@ import threading
 from funktioner.queue import event_queue
 from gui.backend.registry import ToolRegistry
 from gui.backend.main_gui import launch_gui
+from langchain_core.tools import tool
 
 event_loop_instance = None
 
@@ -69,6 +70,14 @@ memory_saver = InMemorySaver()
 
 llm = ChatOllama(model="Qwen3:4b", reasoning=True, num_ctx=8192, num_predict=8192)
 
+
+#get gui information tool
+from gui.backend.bob_integration import gui_system_prompt
+@tool
+def get_gui_information():
+    """run this tool to get to know how to manage the GUI"""
+    return gui_system_prompt()
+
 from tools.ddgs_tool import web_search
 from tools.sok_visible import search_visible_webpage, download_file, move_file, get_clickable_elements, click_on_page, type_into_page, scroll_page, click_and_download, get_page_text, open_browser
 from tools.code_ai import code_ai, code_ai_status
@@ -77,7 +86,7 @@ from tools.quit import shutdown_ai
 from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
 from tools.edit_ai import edit_ai, edit_ai_status, apply_edit_files
-from gui.backend.bob_integration import get_langchain_tools, gui_system_prompt
+from gui.backend.bob_integration import get_langchain_tools
 gui_tools = get_langchain_tools()
 
 tools = [
@@ -135,8 +144,6 @@ Do not mention the memory system unless the user asks about it.
 Do not assume a memory is correct if the current user message contradicts it.
 Allways check memory for relevant information before using tools or answering questions.
 """
-system_prompt = system_prompt + "\n\n" + gui_system_prompt()
-
 
 config = {"configurable": {"thread_id": "some_id"}}
 

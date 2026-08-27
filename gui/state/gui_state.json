@@ -27,16 +27,16 @@
     },
     "voice_toggle": {
       "type": "toggle",
-      "window_id": "main_window",
-      "x": 100,
-      "y": 100,
-      "w": 150,
-      "h": 30,
+      "window_id": "main",
+      "x": 52,
+      "y": 55,
+      "w": 155,
+      "h": 67,
       "label": "Voice Mode",
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": false
+        "value": true
       }
     }
   }

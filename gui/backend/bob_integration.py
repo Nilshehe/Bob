@@ -91,11 +91,7 @@ def get_langchain_tools():
 
     return tools
 
-
 def gui_system_prompt() -> str:
     return (
-        "Du har kontroll över ett dynamiskt hologram-GUI. "
-        "Du kan skapa, flytta, ändra och ta bort element samt hantera "
-        "flera fönster över flera skärmar genom verktygen nedan.\n\n"
-        + ToolRegistry.system_prompt_snippet()
+            "You control a dynamic holographic GUI. You can create, move, modify, and delete elements, as well as manage multiple windows across multiple screens using the tools below." + ToolRegistry.system_prompt_snippet()
     )
