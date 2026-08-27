@@ -75,6 +75,17 @@ html, body {
   letter-spacing: 1px; font-size: 12px;
 }
 
+.gui-element.type-progress .progress-bar {
+  width: 100%; height: 10px; border-radius: 5px;
+  background: rgba(0, 234, 255, 0.1); overflow: hidden;
+  margin-top: 6px;
+}
+.gui-element.type-progress .progress-fill {
+  height: 100%; background: var(--holo-blue);
+  box-shadow: 0 0 8px var(--holo-blue);
+  transition: width 0.3s ease;
+}
+
 .gui-element.type-3d .body { padding: 0; }
 .gui-element.type-3d canvas { width: 100%; height: 100%; display: block; }
 

@@ -387,6 +387,29 @@ function buildBody(
       props.text || "";
 
   }
+
+
+  else if (type === "progress") {
+
+    const bar =
+      document.createElement("div");
+
+    bar.className =
+      "progress-bar";
+
+    const fill =
+      document.createElement("div");
+
+    fill.className =
+      "progress-fill";
+
+    fill.style.width =
+      (props.value || 0) + "%";
+
+    bar.appendChild(fill);
+    body.appendChild(bar);
+
+  }
 }
 
 
@@ -404,6 +427,32 @@ function setToggleDotState(dotEl, value) {
     "on",
     !!value
   );
+}
+
+
+function applyProgressProps(id, props) {
+  const e =
+    elements[id];
+
+  if (!e) {
+    return;
+  }
+
+  const fill =
+    e.dom.querySelector(
+      ".progress-fill"
+    );
+
+  if (!fill) {
+    return;
+  }
+
+  if (props.value === undefined) {
+    return;
+  }
+
+  fill.style.width =
+    props.value + "%";
 }
 
 
@@ -568,6 +617,17 @@ function updateElementDom(
     e.type === "toggle"
   ) {
     applyToggleProps(
+      id,
+      fields.props
+    );
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "progress"
+  ) {
+    applyProgressProps(
       id,
       fields.props
     );

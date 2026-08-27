@@ -29,6 +29,20 @@ def get_screens():
     return screens
 
 
+def get_windows():
+    out = []
+    for window_id, meta in state.state["windows"].items():
+        out.append({
+            "window_id": window_id,
+            "title": meta.get("title"),
+            "x": meta.get("x"), "y": meta.get("y"),
+            "w": meta.get("w"), "h": meta.get("h"),
+            "screen": meta.get("screen"),
+            "element_count": len(state.all_elements_for_window(window_id)),
+        })
+    return out
+
+
 def _resolve_screen_pos(screen: Optional[int], x: Optional[int], y: Optional[int]):
     if screen is None:
         return x, y

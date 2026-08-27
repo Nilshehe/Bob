@@ -162,6 +162,7 @@ def _normalize_model_path(model_path):
                 "input",
                 "3d",
                 "toggle",
+                "progress",
             ],
         },
         "window_id": {
@@ -295,6 +296,50 @@ def create_toggle_button(
     return {
         "element_id": element_id,
         "value": bool(current_value),
+    }
+
+
+@tool(
+    "Sätt värdet (0-100) på en progressbar-widget.",
+    parameters={
+        "element_id": {"type": "string"},
+        "value": {
+            "type": "integer",
+            "description": "0-100",
+        },
+    },
+    required=["element_id", "value"],
+)
+def set_progress(element_id, value):
+    el = state.get_element(element_id)
+
+    if not el:
+        raise ValueError(f"Okänt element: {element_id}")
+
+    value = max(0, min(100, value))
+
+    props = {
+        **el.get("props", {}),
+        "value": value,
+    }
+
+    state.upsert_element(
+        element_id,
+        props=props,
+    )
+
+    gui_server.manager.send(
+        el["window_id"],
+        {
+            "type": "update_element",
+            "element_id": element_id,
+            "props": props,
+        },
+    )
+
+    return {
+        "ok": True,
+        "value": value,
     }
 
 
@@ -704,6 +749,15 @@ def close_window(window_id):
 )
 def get_screens():
     return wm.get_screens()
+
+
+@tool(
+    "Lista alla öppna GUI-fönster med window_id, titel, position, "
+    "storlek och antal element. Använd innan element skapas/flyttas "
+    "för att se vilka window_id som faktiskt finns."
+)
+def list_windows():
+    return wm.get_windows()
 
 
 # ---------------------------------------------------------------------

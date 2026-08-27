@@ -28,15 +28,39 @@
     "voice_toggle": {
       "type": "toggle",
       "window_id": "main",
-      "x": 52,
-      "y": 55,
+      "x": 13,
+      "y": 9,
       "w": 155,
       "h": 67,
       "label": "Voice Mode",
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": true
+        "value": false
+      }
+    },
+    "bob_text": {
+      "type": "text",
+      "window_id": "main",
+      "x": 644,
+      "y": 365,
+      "w": 531,
+      "h": 124,
+      "label": "Bob",
+      "visible": true,
+      "props": {}
+    },
+    "progress_bar": {
+      "type": "status",
+      "window_id": "main",
+      "x": 311,
+      "y": 745,
+      "w": 647,
+      "h": 65,
+      "label": "proggres",
+      "visible": true,
+      "props": {
+        "value": 60
       }
     }
   }

@@ -11,6 +11,7 @@ from pydantic import create_model
 
 from gui.backend.registry import ToolRegistry
 import gui.backend.gui_tools  # registrerar GUI-verktygen
+import gui.backend.window_manager as wm
 
 
 def _build_args_schema(spec):
@@ -92,6 +93,29 @@ def get_langchain_tools():
     return tools
 
 def gui_system_prompt() -> str:
+    windows = wm.get_windows()
+
+    if windows:
+        window_lines = "\n".join(
+            f"- window_id=\"{w['window_id']}\" title=\"{w.get('title')}\" "
+            f"({w.get('element_count', 0)} element)"
+            for w in windows
+        )
+        windows_block = (
+            "\n\nCurrently open windows (use these exact window_id values, "
+            "never guess or invent one — call list_windows if you need to "
+            "re-check):\n" + window_lines
+        )
+    else:
+        windows_block = (
+            "\n\nNo windows are currently open. Call create_window first "
+            "and use the window_id it returns — do not guess one."
+        )
+
     return (
-            "You control a dynamic holographic GUI. You can create, move, modify, and delete elements, as well as manage multiple windows across multiple screens using the tools below." + ToolRegistry.system_prompt_snippet()
+        "You control a dynamic holographic GUI. You can create, move, "
+        "modify, and delete elements, as well as manage multiple windows "
+        "across multiple screens using the tools below."
+        + ToolRegistry.system_prompt_snippet()
+        + windows_block
     )
