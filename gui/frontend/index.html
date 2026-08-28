@@ -11,6 +11,36 @@
 </head>
 <body>
   <div id="canvas"></div>
+
+  <!-- Permanent chatt-input. Göms automatiskt när Voice Mode är på. -->
+  <div id="chat-bar">
+    <input id="chat-input" type="text" placeholder="Skriv till Bob..." autocomplete="off">
+    <button id="chat-send">Skicka</button>
+  </div>
+
+  <!-- Röst-cirkel. Syns bara när Voice Mode är på. -->
+  <div id="voice-circle" class="hidden">
+    <div id="voice-circle-ring"></div>
+    <div id="voice-circle-core"></div>
+    <div id="voice-circle-label">lyssnar...</div>
+  </div>
+
+  <!-- Live-svarswidget: visar textström, resonemang, tool calls, interrupts. -->
+  <div id="stream-panel">
+    <div id="stream-header">
+      <span>BOB — live</span>
+      <button id="stream-settings-btn" title="Inställningar">⚙</button>
+    </div>
+    <div id="stream-settings">
+      <label><input type="checkbox" id="show-text" checked> Text</label>
+      <label><input type="checkbox" id="show-reasoning" checked> Resonemang</label>
+      <label><input type="checkbox" id="show-tool_call_chunk" checked> Tool calls</label>
+      <label><input type="checkbox" id="show-interrupt" checked> Interrupts</label>
+      <button id="stream-clear-btn">Rensa</button>
+    </div>
+    <div id="stream-body"></div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

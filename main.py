@@ -18,6 +18,7 @@ import threading
 from funktioner.queue import event_queue
 from gui.backend.registry import ToolRegistry
 from gui.backend.main_gui import launch_gui
+import gui.backend.gui_server as gui_server
 from langchain_core.tools import tool
 
 event_loop_instance = None
@@ -64,6 +65,38 @@ register_edit_notify_callback(_on_edit_job_done)
 
 VOICE_MODE = False
 TALKING = False
+
+
+def _broadcast_voice_state(**fields):
+    """Skickar röstläges-status (på/av, vaken, lyssnar, ljudnivå) till alla
+    öppna GUI-fönster, så den permanenta text-inputen kan gömmas och
+    väckningscirkeln kan animeras i realtid."""
+    try:
+        gui_server.manager.broadcast({"type": "voice_state", **fields})
+    except Exception:
+        pass
+
+
+def _broadcast_agent_stream(node_type, content):
+    """Speglar samma svarsström som formater() skriver ut i terminalen till
+    GUI:ts live-svarswidget (text/reasoning/tool_call_chunk/interrupt)."""
+    if not content:
+        return
+    try:
+        gui_server.manager.broadcast({
+            "type": "agent_stream",
+            "node_type": node_type,
+            "content": content,
+        })
+    except Exception:
+        pass
+
+
+def _emit(response, node_type):
+    """Skriver ut i terminalen (som förut) och speglar samtidigt till
+    GUI:ts live-svarswidget."""
+    formater(response, node_type)
+    _broadcast_agent_stream(node_type, response)
 
 from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
@@ -117,6 +150,7 @@ tools = [
 def _set_voice_mode(state: bool):
     global VOICE_MODE
     VOICE_MODE = bool(state)
+    _broadcast_voice_state(mode=VOICE_MODE, awake=False, listening=False, level=0.0)
     return f"VOICE MODE is now {'on' if VOICE_MODE else 'off'}"
 
 def _get_voice_mode():
@@ -234,17 +268,20 @@ def interupt_identifier(chunk, voice_mode: bool = None):
         tool_name = req['name']
         args = req.get("args") or req.get("arguments") or {}
         reasoning = _get_last_ai_reasoning(config)
+        _broadcast_agent_stream("interrupt", f"{tool_name}({args})")
         decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode), TALKING)
         if decision["type"] == "reject":
             print(f"\033[31mRejected: {decision['message']}\033[0m")
+            _broadcast_agent_stream("interrupt", f"Rejected: {decision['message']}")
         else:
             print("\033[32mApproved.\033[0m")
+            _broadcast_agent_stream("interrupt", "Approved.")
         for token_data, block in resume_after_interrupt(agent, config, decision):
             response, node_type = get_last_text(token_data, block)
             if node_type == "interrupt":
                 interupt_identifier(block, voice_mode)
             else:
-                formater(response, node_type)
+                _emit(response, node_type)
 
 def resume_after_interrupt(agent, config, decision):
     for block in agent.stream(
@@ -269,10 +306,23 @@ async def input_loop(input_enabled):
         await input_enabled.wait()
         if VOICE_MODE:
             print("\nWaiting for wake word...")
-            await asyncio.to_thread(wait_for_wake_word)
+            _broadcast_voice_state(mode=True, awake=False, listening=True, level=0.0)
+            await asyncio.to_thread(
+                wait_for_wake_word,
+                level_callback=lambda lvl: _broadcast_voice_state(
+                    mode=True, awake=False, listening=True, level=lvl
+                ),
+            )
             print("Wake word detected.")
-            user_input = await asyncio.to_thread(stt_main)
+            _broadcast_voice_state(mode=True, awake=True, listening=False, level=0.0)
+            user_input = await asyncio.to_thread(
+                stt_main,
+                level_callback=lambda lvl: _broadcast_voice_state(
+                    mode=True, awake=True, listening=True, level=lvl
+                ),
+            )
             print(f"User input: {user_input}")
+            _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
         else:
             user_input = await asyncio.to_thread(input, "\nask me anything: ")
         input_enabled.clear()
@@ -285,12 +335,13 @@ async def event_loop(input_enabled):
         event = await event_queue.get()
         if event["type"] == "user_message":
             WORDS = []
+            _broadcast_agent_stream("turn", "\u2022")
             async for token_data, block in main(event["content"], "user123"):
                 response, node_type = get_last_text(token_data, block)
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    _emit(response, node_type)
                     if node_type == "text" and response:
                         WORDS.append(response)
             if TALKING:
@@ -300,6 +351,7 @@ async def event_loop(input_enabled):
             input_enabled.set()
         elif event["type"] == "code_ai_finished":
             WORDS = []
+            _broadcast_agent_stream("turn", "\u2022")
             async for token_data, block in main(
                 f"THIS IS AN AUTOMATIC MESSAGE: async job with job id {event['job_id']} is finished. Result: {event['result']}",
                 "user123"
@@ -308,7 +360,7 @@ async def event_loop(input_enabled):
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    _emit(response, node_type)
                     if node_type == "text" and response:
                         WORDS.append(response)
             if TALKING:
@@ -318,6 +370,7 @@ async def event_loop(input_enabled):
             input_enabled.set()
         elif event["type"] == "research_ai_finished":
             WORDS = []
+            _broadcast_agent_stream("turn", "\u2022")
             async for token_data, block in main(
                 f"THIS IS AN AUTOMATIC MESSAGE: research job with id {event['job_id']} is finished. Result: {event['result']}",
                 "user123"
@@ -326,7 +379,7 @@ async def event_loop(input_enabled):
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    _emit(response, node_type)
                     if node_type == "text" and response:
                         WORDS.append(response)
             if TALKING:
@@ -336,6 +389,7 @@ async def event_loop(input_enabled):
             input_enabled.set()
         elif event["type"] == "edit_ai_finished":
             WORDS = []
+            _broadcast_agent_stream("turn", "\u2022")
             async for token_data, block in main(
                 f"THIS IS AN AUTOMATIC MESSAGE: edit job with id {event['job_id']} is finished. Result: {event['result']}",
                 "user123"
@@ -344,7 +398,7 @@ async def event_loop(input_enabled):
                 if node_type == "interrupt":
                     interupt_identifier(block)
                 else:
-                    formater(response, node_type)
+                    _emit(response, node_type)
                     if node_type == "text" and response:
                         WORDS.append(response)
             if TALKING:
@@ -357,6 +411,10 @@ async def app():
     global event_loop_instance
 
     event_loop_instance = asyncio.get_running_loop()
+
+    # Låt GUI-servern (som körs i sin egen tråd/loop) veta vilken loop
+    # den ska skicka trådsäkra chattmeddelanden till.
+    gui_server.register_bridge_loop(event_loop_instance)
 
     input_enabled = asyncio.Event()
     input_enabled.set()

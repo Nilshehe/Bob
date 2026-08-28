@@ -13,6 +13,19 @@ STATE_FILE = Path(__file__).parent.parent / "state" / "gui_state.json"
 DEFAULT_STATE = {
     "windows": {},   # window_id -> {title, x, y, w, h, screen}
     "elements": {},  # element_id -> {type, window_id, x, y, w, h, visible, label, props}
+    "stream_panel": {
+        # Bobs live-svarswidget - permanent GUI-element, styrbart av Bob
+        # via gui_tools.py (set_stream_panel/set_stream_panel_filters) och
+        # av användaren via kugghjulet i frontend.
+        "visible": True,
+        "x": None, "y": None, "w": None, "h": None,  # None = CSS-default (uppe till höger)
+        "filters": {
+            "text": True,
+            "reasoning": True,
+            "tool_call_chunk": True,
+            "interrupt": True,
+        },
+    },
 }
 
 
@@ -66,6 +79,23 @@ class StateManager:
 
     def all_elements_for_window(self, window_id: str):
         return {eid: e for eid, e in self.state["elements"].items() if e.get("window_id") == window_id}
+
+    # ---- svarswidget (stream panel) ----
+    def get_stream_panel(self):
+        """Returnerar aktuellt state för svarswidgeten, med fallback till
+        default om filen skrevs innan den här funktionen fanns."""
+        default = json.loads(json.dumps(DEFAULT_STATE["stream_panel"]))
+        panel = self.state.setdefault("stream_panel", default)
+        panel.setdefault("filters", default["filters"])
+        return panel
+
+    def update_stream_panel(self, filters: Dict[str, Any] = None, **fields):
+        panel = self.get_stream_panel()
+        panel.update({k: v for k, v in fields.items() if v is not None})
+        if filters:
+            panel["filters"].update({k: v for k, v in filters.items() if v is not None})
+        self.save()
+        return panel
 
 
 state = StateManager()

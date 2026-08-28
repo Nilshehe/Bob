@@ -151,10 +151,15 @@ def load_templates():
 
 # ================= Live-detektion =================
 
-def wait_for_wake_word(templates=None):
+def wait_for_wake_word(templates=None, level_callback=None):
     """
     Blocks until the wake word is heard. Prints DTW distances so you can
     observe that it is listening and how close a match is.
+
+    level_callback(level: float), om angiven, anropas varje CHECK_INTERVAL_S
+    med den råa RMS-ljudnivån (oavsett om den passerar ENERGY_GATE eller
+    inte) - t.ex. för att driva en GUI-visualisering medan Bob lyssnar
+    efter sitt wake word.
     """
     if templates is None:
         templates = load_templates()
@@ -172,6 +177,13 @@ def wait_for_wake_word(templates=None):
             time.sleep(CHECK_INTERVAL_S)
 
             level = np.sqrt(np.mean(buf ** 2))
+
+            if level_callback is not None:
+                try:
+                    level_callback(float(level))
+                except Exception:
+                    pass
+
             if level < ENERGY_GATE:
                 #print(f"\r... (tyst, nivå={level:.4f})   ", end="", flush=True)
                 continue

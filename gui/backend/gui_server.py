@@ -52,6 +52,19 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# ---------------------------------------------------------------------
+# Bro till Bob:s agent-loop (main.py körs i en egen tråd/event-loop, skild
+# från den här FastAPI/uvicorn-loopen). main.py anropar register_bridge_loop
+# med sin egen loop så att t.ex. chattmeddelanden från GUI:t kan skickas
+# över till event_queue på rätt tråd.
+# ---------------------------------------------------------------------
+bridge_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def register_bridge_loop(loop: asyncio.AbstractEventLoop):
+    global bridge_loop
+    bridge_loop = loop
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -74,6 +87,27 @@ async def ws_endpoint(websocket: WebSocket, window_id: str):
     win = state.state["windows"].get(window_id, {})
     els = state.all_elements_for_window(window_id)
     await websocket.send_text(json.dumps({"type": "sync", "window": win, "elements": els}, ensure_ascii=False))
+
+    # Skicka aktuellt Voice Mode-läge direkt så den permanenta chatt-inputen/
+    # cirkeln renderas rätt från start, även efter en omstart av fönstret.
+    try:
+        from gui.backend.registry import ToolRegistry
+        voice_mode = bool(ToolRegistry.get_variable("Voice Mode"))
+    except Exception:
+        voice_mode = False
+
+    await websocket.send_text(json.dumps(
+        {"type": "voice_state", "mode": voice_mode, "awake": False, "listening": False, "level": 0.0},
+        ensure_ascii=False,
+    ))
+
+    # Skicka aktuellt state för svarswidgeten (synlighet, position, storlek,
+    # vilka innehållstyper som visas) så den renderas rätt direkt.
+    await websocket.send_text(json.dumps(
+        {"type": "stream_panel_state", **state.get_stream_panel()},
+        ensure_ascii=False,
+    ))
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -92,6 +126,29 @@ def _handle_event(window_id: str, msg: dict):
         state.upsert_element(msg["element_id"], w=msg["w"], h=msg["h"])
     elif mtype == "element_clicked":
         _handle_element_clicked(window_id, msg.get("element_id"))
+    elif mtype == "user_chat_message":
+        _handle_user_chat_message(msg.get("content", ""))
+    elif mtype == "stream_panel_updated":
+        # Användaren kryssade i/ur en filter-checkbox i kugghjuls-menyn.
+        # Persistera och synka till ev. andra öppna fönster.
+        panel = state.update_stream_panel(filters=msg.get("filters"))
+        manager.broadcast({"type": "stream_panel_state", **panel})
+
+
+def _handle_user_chat_message(content: str):
+    """Meddelande från den permanenta text-inputen i GUI:t. Läggs på Bob:s
+    event_queue precis som ett meddelande skrivet i terminalen eller sagt
+    via röst, fast trådsäkert eftersom vi kör i uvicorn:s egen event-loop."""
+    content = (content or "").strip()
+    if not content or bridge_loop is None:
+        return
+
+    from funktioner.queue import event_queue
+
+    asyncio.run_coroutine_threadsafe(
+        event_queue.put({"type": "user_message", "content": content}),
+        bridge_loop,
+    )
 
 
 def _handle_element_clicked(window_id: str, element_id: str):

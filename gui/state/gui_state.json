@@ -42,26 +42,26 @@
     "bob_text": {
       "type": "text",
       "window_id": "main",
-      "x": 644,
-      "y": 365,
-      "w": 531,
-      "h": 124,
+      "x": 386,
+      "y": 232,
+      "w": 428,
+      "h": 295,
       "label": "Bob",
       "visible": true,
       "props": {}
-    },
-    "progress_bar": {
-      "type": "status",
-      "window_id": "main",
-      "x": 311,
-      "y": 745,
-      "w": 647,
-      "h": 65,
-      "label": "proggres",
-      "visible": true,
-      "props": {
-        "value": 60
-      }
+    }
+  },
+  "stream_panel": {
+    "visible": true,
+    "x": null,
+    "y": null,
+    "w": 400,
+    "h": null,
+    "filters": {
+      "text": true,
+      "reasoning": true,
+      "tool_call_chunk": false,
+      "interrupt": true
     }
   }
 }

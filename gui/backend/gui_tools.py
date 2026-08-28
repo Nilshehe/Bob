@@ -978,3 +978,126 @@ variable(
         color=v
     ),
 )
+
+
+# ---------------------------------------------------------------------
+# Svarswidget (stream panel)
+# ---------------------------------------------------------------------
+# Den permanenta panelen som visar Bobs svarsström live (text, resonemang,
+# tool calls, interrupts). Till skillnad från vanliga GUI-element är den
+# inte en dynamisk widget i "elements"-listan - den är fast UI i frontend,
+# men styrs på samma sätt: via websocket-meddelanden + persistent state.
+
+@tool(
+    "Visa, göm, flytta eller ändra storlek på Bobs live-svarswidget (panelen "
+    "som visar text/resonemang/tool calls/interrupts i realtid, normalt "
+    "uppe till höger). Ange bara de fält som ska ändras.",
+    parameters={
+        "visible": {
+            "type": "boolean",
+            "description": "True = visa panelen, False = göm den",
+        },
+        "x": {
+            "type": "integer",
+            "description": "Ny X-position i pixlar (skärm-koordinater)",
+        },
+        "y": {
+            "type": "integer",
+            "description": "Ny Y-position i pixlar",
+        },
+        "w": {
+            "type": "integer",
+            "description": "Ny bredd i pixlar",
+        },
+        "h": {
+            "type": "integer",
+            "description": "Ny höjd i pixlar",
+        },
+    },
+)
+def set_stream_panel(
+    visible=None,
+    x=None,
+    y=None,
+    w=None,
+    h=None,
+):
+    panel = state.update_stream_panel(
+        visible=visible,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+    )
+
+    gui_server.manager.broadcast({
+        "type": "stream_panel_state",
+        **panel,
+    })
+
+    return panel
+
+
+@tool(
+    "Ställ in vilka typer av innehåll Bobs live-svarswidget ska visa. Ange "
+    "bara de fält som ska ändras, resten lämnas som de är.",
+    parameters={
+        "text": {
+            "type": "boolean",
+            "description": "Visa Bobs textsvar",
+        },
+        "reasoning": {
+            "type": "boolean",
+            "description": "Visa Bobs resonemang/tankar",
+        },
+        "tool_call_chunk": {
+            "type": "boolean",
+            "description": "Visa verktygsanrop Bob gör",
+        },
+        "interrupt": {
+            "type": "boolean",
+            "description": "Visa interrupts (godkännande-förfrågningar)",
+        },
+    },
+)
+def set_stream_panel_filters(
+    text=None,
+    reasoning=None,
+    tool_call_chunk=None,
+    interrupt=None,
+):
+    panel = state.update_stream_panel(
+        filters={
+            "text": text,
+            "reasoning": reasoning,
+            "tool_call_chunk": tool_call_chunk,
+            "interrupt": interrupt,
+        }
+    )
+
+    gui_server.manager.broadcast({
+        "type": "stream_panel_state",
+        **panel,
+    })
+
+    return panel
+
+
+@tool(
+    "Rensa allt innehåll (historik) i Bobs live-svarswidget, utan att ändra "
+    "synlighet, position eller filterinställningar."
+)
+def clear_stream_panel():
+    gui_server.manager.broadcast({
+        "type": "stream_panel_clear",
+    })
+
+    return {"ok": True}
+
+
+@tool(
+    "Läs av aktuellt state för Bobs live-svarswidget: synlighet, position, "
+    "storlek och vilka innehållstyper som visas just nu."
+)
+def get_stream_panel_state():
+    return state.get_stream_panel()

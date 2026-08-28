@@ -62,6 +62,28 @@ ws.onclose = () => {
 function handleMessage(msg) {
   switch (msg.type) {
 
+    case "voice_state":
+      handleVoiceState(msg);
+      break;
+
+
+    case "agent_stream":
+      handleAgentStream(msg);
+      break;
+
+
+    case "stream_panel_state":
+      applyStreamPanelState(msg);
+      break;
+
+
+    case "stream_panel_clear":
+      if (streamBody) {
+        streamBody.innerHTML = "";
+      }
+      break;
+
+
     case "sync":
       Object.entries(
         msg.elements || {}
@@ -1117,4 +1139,220 @@ function apply3DProps(
       props.scale
     );
   }
+}
+
+// =======================================================================
+// Permanent chatt-input
+// =======================================================================
+
+const chatBar = document.getElementById("chat-bar");
+const chatInput = document.getElementById("chat-input");
+const chatSend = document.getElementById("chat-send");
+
+function sendChatMessage() {
+  const text = chatInput.value.trim();
+
+  if (!text) {
+    return;
+  }
+
+  sendEvent({
+    type: "user_chat_message",
+    content: text,
+  });
+
+  chatInput.value = "";
+}
+
+chatSend.addEventListener("click", sendChatMessage);
+
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendChatMessage();
+  }
+});
+
+
+// =======================================================================
+// Voice state: göm chatt-input, driv väckningscirkeln
+// =======================================================================
+
+const voiceCircle = document.getElementById("voice-circle");
+const voiceCircleLabel = document.getElementById("voice-circle-label");
+
+// Enkel jämnande (så cirkeln inte hackar mellan varje ljudsampel).
+let smoothedLevel = 0;
+
+function handleVoiceState(msg) {
+  const voiceModeOn = !!msg.mode;
+
+  chatBar.classList.toggle("hidden", voiceModeOn);
+  voiceCircle.classList.toggle("hidden", !voiceModeOn);
+
+  if (!voiceModeOn) {
+    return;
+  }
+
+  voiceCircle.classList.toggle("awake", !!msg.awake);
+  voiceCircle.classList.toggle("listening", !!msg.listening);
+
+  voiceCircleLabel.textContent =
+    msg.awake ? "lyssnar..." :
+    msg.listening ? "väntar på \u201eBob\u201d..." :
+    "vilar";
+
+  if (typeof msg.level === "number") {
+    // Rå RMS-nivå är ofta liten (t.ex. 0.001-0.3) - skala upp och klämm
+    // fast mellan 0 och 1 så CSS-transformen blir tydlig.
+    const scaled = Math.min(1, msg.level * 12);
+    smoothedLevel += (scaled - smoothedLevel) * 0.35;
+
+    const scale = 1 + smoothedLevel * 0.6;
+    const glow = 20 + smoothedLevel * 60;
+
+    voiceCircle.style.setProperty("--voice-scale", scale.toFixed(3));
+    voiceCircle.style.setProperty("--voice-glow", glow.toFixed(0) + "px");
+  }
+}
+
+
+// =======================================================================
+// Live-svarswidget
+// =======================================================================
+
+const streamPanel = document.getElementById("stream-panel");
+const streamBody = document.getElementById("stream-body");
+const streamSettingsBtn = document.getElementById("stream-settings-btn");
+const streamSettings = document.getElementById("stream-settings");
+const streamClearBtn = document.getElementById("stream-clear-btn");
+
+const STREAM_TYPES = ["text", "reasoning", "tool_call_chunk", "interrupt"];
+
+// Panelens state (synlighet, position, storlek, filter) ägs av backend nu
+// - dels så Bob kan styra den via sina GUI-verktyg, dels så den överlever
+// omstart precis som fönster/element. Den här flaggan förhindrar att vårt
+// eget "change"-event på en checkbox skickas tillbaka till servern när det
+// egentligen bara var vi som applicerade ett inkommande state-meddelande.
+let applyingRemotePanelState = false;
+
+function applyStreamPanelState(s) {
+  applyingRemotePanelState = true;
+
+  streamPanel.classList.toggle("hidden", s.visible === false);
+
+  if (typeof s.w === "number") {
+    streamPanel.style.width = s.w + "px";
+  }
+
+  if (typeof s.h === "number") {
+    streamPanel.style.maxHeight = "none";
+    streamPanel.style.height = s.h + "px";
+  }
+
+  if (typeof s.x === "number" && typeof s.y === "number") {
+    streamPanel.style.left = s.x + "px";
+    streamPanel.style.top = s.y + "px";
+    streamPanel.style.right = "auto";
+  }
+
+  if (s.filters) {
+    STREAM_TYPES.forEach((t) => {
+      const cb = document.getElementById(`show-${t}`);
+      if (cb && typeof s.filters[t] === "boolean") {
+        cb.checked = s.filters[t];
+      }
+    });
+  }
+
+  applyingRemotePanelState = false;
+}
+
+function sendStreamPanelFilters() {
+  const filters = {};
+
+  STREAM_TYPES.forEach((t) => {
+    const cb = document.getElementById(`show-${t}`);
+    filters[t] = cb ? cb.checked : true;
+  });
+
+  sendEvent({
+    type: "stream_panel_updated",
+    filters,
+  });
+}
+
+function streamTypeEnabled(nodeType) {
+  const cb = document.getElementById(`show-${nodeType}`);
+  return cb ? cb.checked : true;
+}
+
+STREAM_TYPES.forEach((t) => {
+  const cb = document.getElementById(`show-${t}`);
+  if (cb) {
+    cb.addEventListener("change", () => {
+      if (applyingRemotePanelState) {
+        return;
+      }
+      sendStreamPanelFilters();
+    });
+  }
+});
+
+streamSettingsBtn.addEventListener("click", () => {
+  streamSettings.classList.toggle("open");
+});
+
+streamClearBtn.addEventListener("click", () => {
+  streamBody.innerHTML = "";
+});
+
+let currentStreamRun = null;
+
+function handleAgentStream(msg) {
+  const nodeType = msg.node_type;
+  const content = msg.content;
+
+  // Turmarkör: skickas av backend inför varje ny AI-tur (oavsett om den
+  // triggas av chatt, röst eller en bakgrundsjobb-notis). Visas alltid,
+  // filtreras inte bort av inställningarna.
+  if (nodeType === "turn") {
+    currentStreamRun = null;
+
+    const divider = document.createElement("div");
+    divider.className = "stream-line stream-turn";
+
+    streamBody.appendChild(divider);
+    streamBody.scrollTop = streamBody.scrollHeight;
+    return;
+  }
+
+  if (!content || !streamTypeEnabled(nodeType)) {
+    return;
+  }
+
+  // Text/reasoning strömmar token för token - vi vill klistra ihop dem i
+  // samma rad istället för att skapa en ny rad per token.
+  if (
+    (nodeType === "text" || nodeType === "reasoning") &&
+    currentStreamRun &&
+    currentStreamRun.dataset.nodeType === nodeType
+  ) {
+    currentStreamRun.textContent += content;
+  } else {
+    const line = document.createElement("div");
+
+    line.className = `stream-line stream-${nodeType}`;
+    line.dataset.nodeType = nodeType;
+    line.textContent = content;
+
+    streamBody.appendChild(line);
+
+    if (nodeType === "text" || nodeType === "reasoning") {
+      currentStreamRun = line;
+    } else {
+      currentStreamRun = null;
+    }
+  }
+
+  streamBody.scrollTop = streamBody.scrollHeight;
 }

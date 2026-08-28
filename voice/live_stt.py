@@ -40,8 +40,22 @@ def is_speech(frame_bytes: bytes) -> bool:
         return False
 
 
-def record_utterance() -> bytes:
-    """VAD-based recording: waits for speech, ends after sustained silence."""
+def _frame_level(frame_bytes: bytes) -> float:
+    """RMS-ljudnivå (0..~1) för en rå 16-bit PCM-frame."""
+    if not frame_bytes:
+        return 0.0
+    samples = np.frombuffer(frame_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+    if samples.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(samples ** 2)))
+
+
+def record_utterance(level_callback=None) -> bytes:
+    """VAD-based recording: waits for speech, ends after sustained silence.
+
+    level_callback(level: float), om angiven, anropas för varje ljud-frame
+    (var 20:e ms) med RMS-ljudnivån - t.ex. för att driva en GUI-
+    visualisering som rör sig i takt med hur högt användaren pratar."""
     ring_buffer = collections.deque(maxlen=10)
     triggered = False
     voiced_frames = []
@@ -52,6 +66,12 @@ def record_utterance() -> bytes:
     while True:
         frame = audio_q.get()
         speech = is_speech(frame)
+
+        if level_callback is not None:
+            try:
+                level_callback(_frame_level(frame))
+            except Exception:
+                pass
 
         if not triggered:
             ring_buffer.append((frame, speech))
@@ -82,7 +102,7 @@ print(f"Loading Whisper model ({COMMAND_MODEL_SIZE}, Swedish)...")
 WHISPER = WhisperModel(COMMAND_MODEL_SIZE, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
 print("Ready.")
 
-def stt_main():
+def stt_main(level_callback=None):
     with sd.RawInputStream(
         samplerate=SAMPLE_RATE,
         blocksize=VAD_FRAME_SIZE,
@@ -94,7 +114,7 @@ def stt_main():
             audio_q.get()
 
         print("Listening for command...")
-        cmd_pcm = record_utterance()
+        cmd_pcm = record_utterance(level_callback=level_callback)
 
     cmd_text = transcribe(cmd_pcm, WHISPER)
     return cmd_text
