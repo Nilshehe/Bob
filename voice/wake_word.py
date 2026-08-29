@@ -13,12 +13,18 @@ Importeras även av live_stt.py.
 
 import sys
 import time
+from pathlib import Path
 import numpy as np
 import sounddevice as sd
 
 # ---------------- KONFIG ----------------
 WAKE_WORD_LABEL = "BOB"
-TEMPLATE_FILE = "voice/wake_templates.npz"
+# Absolut sökväg (relativt den här filen) istället för en cwd-relativ
+# sträng - annars misslyckas load_templates() så fort Bob startas från
+# någon annan arbetskatalog än repo-roten (t.ex. via en genväg, en
+# systemtjänst eller GUI:t), vilket kraschar tråden wait_for_wake_word
+# körs i och gör att wake word aldrig fungerar.
+TEMPLATE_FILE = str(Path(__file__).resolve().parent / "wake_templates.npz")
 N_ENROLL_SAMPLES = 5
 WAKE_WORD_DURATION_S = 1.0
 
@@ -169,8 +175,26 @@ def wait_for_wake_word(templates=None, level_callback=None):
 
     def wake_callback(indata, frames, time_info, status):
         nonlocal buf
-        buf = np.roll(buf, -frames)
-        buf[-frames:] = indata[:, 0]
+        try:
+            chunk = indata[:, 0]
+            if frames >= window_samples:
+                # Blocket är minst lika stort som hela lyssningsfönstret -
+                # ta bara de sista window_samples samplen. Utan den här
+                # kontrollen kraschar tilldelningen nedan (fel form) så
+                # fort ett enda stort ljudblock kommer in (t.ex. vid
+                # streamstart eller på vissa ljudenheter/drivrutiner).
+                # PortAudio slutar då tyst leverera ljud till callbacken
+                # och wake word ser ut att "sluta fungera" helt, utan
+                # något synligt fel.
+                buf = np.array(chunk[-window_samples:], dtype="float32")
+            else:
+                buf = np.roll(buf, -frames)
+                buf[-frames:] = chunk
+        except Exception:
+            # En okänd/oväntad avvikelse i ett enstaka ljudblock ska inte
+            # få tysta ner hela lyssningen permanent - hoppa bara över det
+            # blocket och fortsätt lyssna på nästa.
+            pass
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", callback=wake_callback):
         while True:

@@ -25,6 +25,9 @@ DEFAULT_STATE = {
             "tool_call_chunk": True,
             "interrupt": True,
         },
+        # Vilka fönster (window_id) som ska visa live-texten. Tom lista =
+        # visa i alla öppna fönster (bakåtkompatibelt standardbeteende).
+        "windows": [],
     },
 }
 
@@ -87,6 +90,7 @@ class StateManager:
         default = json.loads(json.dumps(DEFAULT_STATE["stream_panel"]))
         panel = self.state.setdefault("stream_panel", default)
         panel.setdefault("filters", default["filters"])
+        panel.setdefault("windows", default["windows"])
         return panel
 
     def update_stream_panel(self, filters: Dict[str, Any] = None, **fields):

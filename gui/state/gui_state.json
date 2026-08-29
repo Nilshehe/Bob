@@ -44,7 +44,7 @@
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": false
+        "value": true
       }
     },
     "bob_text": {
@@ -61,8 +61,8 @@
     "code_ai_monitor": {
       "type": "agent_monitor",
       "window_id": "38c29d3b",
-      "x": 2141,
-      "y": 27,
+      "x": 2115,
+      "y": 35,
       "w": 400,
       "h": 200,
       "label": "Code AI Monitor",
@@ -80,15 +80,18 @@
   },
   "stream_panel": {
     "visible": true,
-    "x": 0,
+    "x": 1000,
     "y": 0,
-    "w": 800,
-    "h": 600,
+    "w": 300,
+    "h": 500,
     "filters": {
       "text": true,
-      "reasoning": false,
-      "tool_call_chunk": false,
-      "interrupt": false
-    }
+      "reasoning": true,
+      "tool_call_chunk": true,
+      "interrupt": true
+    },
+    "windows": [
+      "main"
+    ]
   }
 }

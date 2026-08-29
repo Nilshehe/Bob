@@ -79,11 +79,13 @@ def _broadcast_voice_state(**fields):
 
 def _broadcast_agent_stream(node_type, content):
     """Speglar samma svarsström som formater() skriver ut i terminalen till
-    GUI:ts live-svarswidget (text/reasoning/tool_call_chunk/interrupt)."""
+    GUI:ts live-svarswidget (text/reasoning/tool_call_chunk/interrupt).
+    Skickas bara till de fönster som är valda i svarswidgetens
+    fönster-filter (tom lista = alla fönster)."""
     if not content:
         return
     try:
-        gui_server.manager.broadcast({
+        gui_server.broadcast_agent_stream({
             "type": "agent_stream",
             "node_type": node_type,
             "content": content,

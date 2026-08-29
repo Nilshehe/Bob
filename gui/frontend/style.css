@@ -448,6 +448,29 @@ html, body {
   gap: 6px;
   cursor: pointer;
 }
+#stream-window-filter {
+  border-top: 1px solid rgba(0, 234, 255, 0.15);
+  padding-top: 6px;
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#stream-window-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 14px;
+}
+#stream-window-list.hidden {
+  display: none;
+}
+#stream-window-list label {
+  font-weight: normal;
+  opacity: 0.85;
+}
+
 #stream-clear-btn {
   align-self: flex-start;
   margin-top: 2px;

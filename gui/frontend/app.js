@@ -81,6 +81,11 @@ function handleMessage(msg) {
       break;
 
 
+    case "windows_list":
+      handleWindowsList(msg);
+      break;
+
+
     case "stream_panel_clear":
       if (streamBody) {
         streamBody.innerHTML = "";
@@ -1493,6 +1498,12 @@ function applyStreamPanelState(s) {
     });
   }
 
+  if (Array.isArray(s.windows)) {
+    selectedWindows = s.windows;
+    showAllWindowsCb.checked = selectedWindows.length === 0;
+    renderWindowCheckboxes();
+  }
+
   applyingRemotePanelState = false;
 }
 
@@ -1526,6 +1537,84 @@ STREAM_TYPES.forEach((t) => {
     });
   }
 });
+
+// ---------------------------------------------------------------------
+// Live-svarswidget: vilka fönster den ska visas i
+// ---------------------------------------------------------------------
+
+const showAllWindowsCb = document.getElementById("show-all-windows");
+const streamWindowList = document.getElementById("stream-window-list");
+
+let knownWindows = [];     // [{window_id, title, ...}, ...] - från backend
+let selectedWindows = [];  // window_id:n som är valda; tom lista = alla fönster
+
+function renderWindowCheckboxes() {
+  streamWindowList.innerHTML = "";
+
+  knownWindows.forEach((w) => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+
+    cb.type = "checkbox";
+    cb.dataset.windowId = w.window_id;
+    cb.checked = selectedWindows.length === 0 || selectedWindows.includes(w.window_id);
+
+    cb.addEventListener("change", () => {
+      if (applyingRemotePanelState) {
+        return;
+      }
+      onWindowCheckboxChanged();
+    });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(
+      " " + (w.title || w.window_id) +
+      (w.window_id === windowId ? " (det här fönstret)" : "")
+    ));
+
+    streamWindowList.appendChild(label);
+  });
+
+  streamWindowList.classList.toggle("hidden", showAllWindowsCb.checked);
+}
+
+function onWindowCheckboxChanged() {
+  const checked = Array.from(
+    streamWindowList.querySelectorAll("input[type=checkbox]")
+  )
+    .filter((cb) => cb.checked)
+    .map((cb) => cb.dataset.windowId);
+
+  selectedWindows = checked;
+
+  sendEvent({
+    type: "stream_panel_updated",
+    windows: checked,
+  });
+}
+
+showAllWindowsCb.addEventListener("change", () => {
+  if (applyingRemotePanelState) {
+    return;
+  }
+
+  streamWindowList.classList.toggle("hidden", showAllWindowsCb.checked);
+
+  if (showAllWindowsCb.checked) {
+    selectedWindows = [];
+    sendEvent({
+      type: "stream_panel_updated",
+      windows: [],
+    });
+  } else {
+    onWindowCheckboxChanged();
+  }
+});
+
+function handleWindowsList(msg) {
+  knownWindows = msg.windows || [];
+  renderWindowCheckboxes();
+}
 
 streamSettingsBtn.addEventListener("click", () => {
   streamSettings.classList.toggle("open");

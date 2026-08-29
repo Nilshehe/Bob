@@ -4,7 +4,7 @@ import uuid
 import threading
 import contextvars
 from pathlib import Path
-from ddgs_tool import web_search
+from tools.ddgs_tool import web_search
 
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama

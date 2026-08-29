@@ -9,13 +9,30 @@ Stöd:
 - skapa/flytta/stäng fönster
 - persistent GUI-state
 - 3D-modeller från gui/frontend/models/
+
+Varje verktyg nedan är ett riktigt LangChain-verktyg (@tool från
+langchain_core.tools, med parse_docstring=True så att docstringens
+Args-sektion blir per-parameter-beskrivningar i verktygsschemat).
+Lägg till en ny funktion, dekorera med @tool(parse_docstring=True),
+skriv en Args-rad för varje parameter - så får Bob den automatiskt
+tillgänglig via gui.backend.bob_integration.get_langchain_tools(),
+utan att du behöver röra något annat i systemet.
+
+Variabler (saker Bob kan läsa/skriva som inte är ett "anrop", t.ex.
+Voice Mode eller hologram_color) hanteras fortfarande av den enkla
+ToolRegistry-variabeldelen i registry.py - se längst ner i den här
+filen.
 """
 
 import uuid
 from pathlib import Path
+from typing import Optional
+from typing_extensions import Literal
 from urllib.parse import urlparse
 
-from gui.backend.registry import tool, variable
+from langchain_core.tools import tool
+
+from gui.backend.registry import ToolRegistry, variable
 from gui.backend.state_manager import state
 import gui.backend.gui_server as gui_server
 import gui.backend.window_manager as wm
@@ -147,53 +164,33 @@ def _normalize_model_path(model_path):
 # GUI-element
 # ---------------------------------------------------------------------
 
-@tool(
-    "Skapa ett nytt GUI-element (text, button, panel, status, input, 3d "
-    "eller toggle) i ett fönster. För toggle-knappar som visar/ändrar en "
-    "variabel, använd hellre create_toggle_button.",
-    parameters={
-        "element_type": {
-            "type": "string",
-            "enum": [
-                "text",
-                "button",
-                "panel",
-                "status",
-                "input",
-                "3d",
-                "toggle",
-                "progress",
-            ],
-        },
-        "window_id": {
-            "type": "string",
-            "description": "Vilket fönster elementet ska skapas i",
-        },
-        "x": {"type": "integer"},
-        "y": {"type": "integer"},
-        "w": {"type": "integer"},
-        "h": {"type": "integer"},
-        "label": {
-            "type": "string",
-            "description": "Text/etikett på elementet",
-        },
-        "element_id": {
-            "type": "string",
-            "description": "Valfritt eget id, annars genereras ett",
-        },
-    },
-    required=["element_type", "window_id"],
-)
+@tool(parse_docstring=True)
 def create_element(
-    element_type,
-    window_id,
-    x=40,
-    y=40,
-    w=200,
-    h=80,
-    label="",
-    element_id=None,
-):
+    element_type: Literal[
+        "text", "button", "panel", "status", "input", "3d", "toggle", "progress",
+    ],
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 200,
+    h: int = 80,
+    label: str = "",
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa ett nytt GUI-element (text, button, panel, status, input, 3d
+    eller toggle) i ett fönster. För toggle-knappar som visar/ändrar en
+    variabel, använd hellre create_toggle_button.
+
+    Args:
+        element_type: Typ av element.
+        window_id: Vilket fönster elementet ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Text/etikett på elementet.
+        element_id: Valfritt eget id, annars genereras ett.
+    """
     element_id = (
         element_id
         or f"{element_type}_{uuid.uuid4().hex[:6]}"
@@ -222,42 +219,30 @@ def create_element(
     }
 
 
-@tool(
-    "Skapa en live-monitor för Code AI, Research AI eller Edit AI. "
-    "Monitorn visar status, aktuell aktivitet, progress, verktyg och job_id.",
-    parameters={
-        "agent": {
-            "type": "string",
-            "enum": [
-                "code_ai",
-                "research_ai",
-                "edit_ai",
-            ],
-            "description": "Vilken AI som ska övervakas",
-        },
-        "window_id": {
-            "type": "string",
-            "description": "Vilket fönster monitorn ska skapas i",
-        },
-        "x": {"type": "integer"},
-        "y": {"type": "integer"},
-        "w": {"type": "integer"},
-        "h": {"type": "integer"},
-        "label": {"type": "string"},
-        "element_id": {"type": "string"},
-    },
-    required=["agent", "window_id"],
-)
+@tool(parse_docstring=True)
 def create_agent_monitor(
-    agent,
-    window_id,
-    x=40,
-    y=40,
-    w=320,
-    h=240,
-    label=None,
-    element_id=None,
-):
+    agent: Literal["code_ai", "research_ai", "edit_ai"],
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 320,
+    h: int = 240,
+    label: Optional[str] = None,
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en live-monitor för Code AI, Research AI eller Edit AI.
+    Monitorn visar status, aktuell aktivitet, progress, verktyg och job_id.
+
+    Args:
+        agent: Vilken AI som ska övervakas.
+        window_id: Vilket fönster monitorn ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett ovanför monitorn, annars används agentens namn.
+        element_id: Valfritt eget id, annars genereras ett.
+    """
     if agent not in {
         "code_ai",
         "research_ai",
@@ -311,47 +296,32 @@ def create_agent_monitor(
     }
 
 
-@tool(
-    "Skapa en knapp som visar aktuellt värde för en registrerad variabel "
-    "(t.ex. 'Voice Mode') och byter värdet (true/false) varje gång "
-    "användaren klickar på den. Variabeln måste vara läsbar och skrivbar "
-    "(se list_variables/systemprompten för vilka som finns).",
-    parameters={
-        "variable_name": {
-            "type": "string",
-            "description": "Namnet på en registrerad variabel, t.ex. 'Voice Mode'",
-        },
-        "window_id": {
-            "type": "string",
-            "description": "Vilket fönster knappen ska skapas i",
-        },
-        "x": {"type": "integer"},
-        "y": {"type": "integer"},
-        "w": {"type": "integer"},
-        "h": {"type": "integer"},
-        "label": {
-            "type": "string",
-            "description": "Etikett ovanför knappen, annars används variabelns namn",
-        },
-        "element_id": {
-            "type": "string",
-            "description": "Valfritt eget id, annars genereras ett",
-        },
-    },
-    required=["variable_name", "window_id"],
-)
+@tool(parse_docstring=True)
 def create_toggle_button(
-    variable_name,
-    window_id,
-    x=40,
-    y=40,
-    w=160,
-    h=60,
-    label=None,
-    element_id=None,
-):
-    from gui.backend.registry import ToolRegistry
+    variable_name: str,
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 160,
+    h: int = 60,
+    label: Optional[str] = None,
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en knapp som visar aktuellt värde för en registrerad variabel
+    (t.ex. 'Voice Mode') och byter värdet (true/false) varje gång
+    användaren klickar på den. Variabeln måste vara läsbar och skrivbar
+    (se list_variables/systemprompten för vilka som finns).
 
+    Args:
+        variable_name: Namnet på en registrerad variabel, t.ex. 'Voice Mode'.
+        window_id: Vilket fönster knappen ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett ovanför knappen, annars används variabelns namn.
+        element_id: Valfritt eget id, annars genereras ett.
+    """
     # Kastar ValueError om variabeln inte finns eller inte är läsbar -
     # låter Bob se felet istället för att skapa en knapp som inte funkar.
     current_value = ToolRegistry.get_variable(variable_name)
@@ -388,18 +358,14 @@ def create_toggle_button(
     }
 
 
-@tool(
-    "Sätt värdet (0-100) på en progressbar-widget.",
-    parameters={
-        "element_id": {"type": "string"},
-        "value": {
-            "type": "integer",
-            "description": "0-100",
-        },
-    },
-    required=["element_id", "value"],
-)
-def set_progress(element_id, value):
+@tool(parse_docstring=True)
+def set_progress(element_id: str, value: int) -> dict:
+    """Sätt värdet (0-100) på en progressbar-widget.
+
+    Args:
+        element_id: ID för progressbar-elementet.
+        value: Nytt värde, 0-100.
+    """
     el = state.get_element(element_id)
 
     if not el:
@@ -432,19 +398,15 @@ def set_progress(element_id, value):
     }
 
 
-@tool(
-    "Ta bort eller dölj ett GUI-element. permanent=False döljer det bara "
-    "(det finns kvar och kan visas igen), permanent=True raderar det helt.",
-    parameters={
-        "element_id": {"type": "string"},
-        "permanent": {"type": "boolean"},
-    },
-    required=["element_id"],
-)
-def remove_element(
-    element_id,
-    permanent=False,
-):
+@tool(parse_docstring=True)
+def remove_element(element_id: str, permanent: bool = False) -> dict:
+    """Ta bort eller dölj ett GUI-element. permanent=False döljer det bara
+    (det finns kvar och kan visas igen), permanent=True raderar det helt.
+
+    Args:
+        element_id: ID för elementet som ska tas bort/döljas.
+        permanent: True = radera helt, False = bara dölj.
+    """
     window_id = _wid_for_element(
         element_id
     )
@@ -478,14 +440,13 @@ def remove_element(
     }
 
 
-@tool(
-    "Visa ett tidigare dolt element igen.",
-    parameters={
-        "element_id": {"type": "string"}
-    },
-    required=["element_id"],
-)
-def show_element(element_id):
+@tool(parse_docstring=True)
+def show_element(element_id: str) -> dict:
+    """Visa ett tidigare dolt element igen.
+
+    Args:
+        element_id: ID för elementet som ska visas.
+    """
     el = state.get_element(
         element_id
     )
@@ -510,24 +471,15 @@ def show_element(element_id):
     }
 
 
-@tool(
-    "Flytta ett befintligt GUI-element till en ny position.",
-    parameters={
-        "element_id": {"type": "string"},
-        "x": {"type": "integer"},
-        "y": {"type": "integer"},
-    },
-    required=[
-        "element_id",
-        "x",
-        "y",
-    ],
-)
-def move_element(
-    element_id,
-    x,
-    y,
-):
+@tool(parse_docstring=True)
+def move_element(element_id: str, x: int, y: int) -> dict:
+    """Flytta ett befintligt GUI-element till en ny position.
+
+    Args:
+        element_id: ID för elementet som ska flyttas.
+        x: Ny X-position i pixlar.
+        y: Ny Y-position i pixlar.
+    """
     window_id = _wid_for_element(
         element_id
     )
@@ -558,38 +510,22 @@ def move_element(
     }
 
 
-@tool(
-    "Flytta ett GUI-element från ett fönster till ett annat. "
-    "Widgeten behåller sin storlek, typ, innehåll och egenskaper.",
-    parameters={
-        "element_id": {
-            "type": "string",
-            "description": "ID för widgeten som ska flyttas",
-        },
-        "window_id": {
-            "type": "string",
-            "description": "ID för det nya fönstret",
-        },
-        "x": {
-            "type": "integer",
-            "description": "Ny X-position i det nya fönstret",
-        },
-        "y": {
-            "type": "integer",
-            "description": "Ny Y-position i det nya fönstret",
-        },
-    },
-    required=[
-        "element_id",
-        "window_id",
-    ],
-)
+@tool(parse_docstring=True)
 def move_element_to_window(
-    element_id,
-    window_id,
-    x=None,
-    y=None,
-):
+    element_id: str,
+    window_id: str,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+) -> dict:
+    """Flytta ett GUI-element från ett fönster till ett annat. Widgeten
+    behåller sin storlek, typ, innehåll och egenskaper.
+
+    Args:
+        element_id: ID för widgeten som ska flyttas.
+        window_id: ID för det nya fönstret.
+        x: Ny X-position i det nya fönstret.
+        y: Ny Y-position i det nya fönstret.
+    """
     el = state.get_element(
         element_id
     )
@@ -607,7 +543,7 @@ def move_element_to_window(
     if old_window_id == window_id:
 
         if x is not None or y is not None:
-            return move_element(
+            return move_element.func(
                 element_id,
                 x if x is not None else el.get("x", 40),
                 y if y is not None else el.get("y", 40),
@@ -666,30 +602,26 @@ def move_element_to_window(
     }
 
 
-@tool(
-    "Uppdatera egenskaper hos ett element: storlek, text/etikett, synlighet "
-    "eller fria extra-egenskaper.",
-    parameters={
-        "element_id": {"type": "string"},
-        "w": {"type": "integer"},
-        "h": {"type": "integer"},
-        "label": {"type": "string"},
-        "visible": {"type": "boolean"},
-        "props": {
-            "type": "object",
-            "description": "Fria extra-egenskaper",
-        },
-    },
-    required=["element_id"],
-)
+@tool(parse_docstring=True)
 def update_element(
-    element_id,
-    w=None,
-    h=None,
-    label=None,
-    visible=None,
-    props=None,
-):
+    element_id: str,
+    w: Optional[int] = None,
+    h: Optional[int] = None,
+    label: Optional[str] = None,
+    visible: Optional[bool] = None,
+    props: Optional[dict] = None,
+) -> dict:
+    """Uppdatera egenskaper hos ett element: storlek, text/etikett,
+    synlighet eller fria extra-egenskaper.
+
+    Args:
+        element_id: ID för elementet som ska uppdateras.
+        w: Ny bredd i pixlar.
+        h: Ny höjd i pixlar.
+        label: Ny text/etikett.
+        visible: Ny synlighet.
+        props: Fria extra-egenskaper som ska mergas in.
+    """
     if not state.get_element(
         element_id
     ):
@@ -755,24 +687,21 @@ def update_element(
 # Fönster
 # ---------------------------------------------------------------------
 
-@tool(
-    "Skapa ett nytt GUI-fönster, ev. på en specifik skärm.",
-    parameters={
-        "title": {"type": "string"},
-        "width": {"type": "integer"},
-        "height": {"type": "integer"},
-        "screen": {
-            "type": "integer",
-            "description": "Skärmindex från get_screens()",
-        },
-    },
-)
+@tool(parse_docstring=True)
 def create_window(
-    title="Bob",
-    width=900,
-    height=600,
-    screen=None,
-):
+    title: str = "Bob",
+    width: int = 900,
+    height: int = 600,
+    screen: Optional[int] = None,
+) -> dict:
+    """Skapa ett nytt GUI-fönster, ev. på en specifik skärm.
+
+    Args:
+        title: Fönstertitel.
+        width: Bredd i pixlar.
+        height: Höjd i pixlar.
+        screen: Skärmindex från get_screens().
+    """
     window_id = wm.create_window(
         title=title,
         width=width,
@@ -780,30 +709,28 @@ def create_window(
         screen=screen,
     )
 
+    gui_server.broadcast_windows_list()
+
     return {
         "window_id": window_id
     }
 
 
-@tool(
-    "Flytta ett fönster till nya koordinater eller till en annan skärm.",
-    parameters={
-        "window_id": {"type": "string"},
-        "x": {"type": "integer"},
-        "y": {"type": "integer"},
-        "screen": {
-            "type": "integer",
-            "description": "Skärmindex, t.ex. 0 eller 1",
-        },
-    },
-    required=["window_id"],
-)
+@tool(parse_docstring=True)
 def move_window(
-    window_id,
-    x=None,
-    y=None,
-    screen=None,
-):
+    window_id: str,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+    screen: Optional[int] = None,
+) -> dict:
+    """Flytta ett fönster till nya koordinater eller till en annan skärm.
+
+    Args:
+        window_id: ID för fönstret som ska flyttas.
+        x: Ny X-position.
+        y: Ny Y-position.
+        screen: Skärmindex, t.ex. 0 eller 1.
+    """
     wm.move_window(
         window_id,
         x=x,
@@ -816,36 +743,35 @@ def move_window(
     }
 
 
-@tool(
-    "Stäng ett GUI-fönster (och de element som hör till det).",
-    parameters={
-        "window_id": {"type": "string"}
-    },
-    required=["window_id"],
-)
-def close_window(window_id):
+@tool(parse_docstring=True)
+def close_window(window_id: str) -> dict:
+    """Stäng ett GUI-fönster (och de element som hör till det).
+
+    Args:
+        window_id: ID för fönstret som ska stängas.
+    """
     wm.close_window(
         window_id
     )
+
+    gui_server.broadcast_windows_list()
 
     return {
         "ok": True
     }
 
 
-@tool(
-    "Lista anslutna skärmar med upplösning och position."
-)
-def get_screens():
+@tool(parse_docstring=True)
+def get_screens() -> list:
+    """Lista anslutna skärmar med upplösning och position."""
     return wm.get_screens()
 
 
-@tool(
-    "Lista alla öppna GUI-fönster med window_id, titel, position, "
-    "storlek och antal element. Använd innan element skapas/flyttas "
-    "för att se vilka window_id som faktiskt finns."
-)
-def list_windows():
+@tool(parse_docstring=True)
+def list_windows() -> list:
+    """Lista alla öppna GUI-fönster med window_id, titel, position,
+    storlek och antal element. Använd innan element skapas/flyttas för
+    att se vilka window_id som faktiskt finns."""
     return wm.get_windows()
 
 
@@ -853,40 +779,25 @@ def list_windows():
 # 3D
 # ---------------------------------------------------------------------
 
-@tool(
-    "Ladda och rendera en 3D-modell (glb/gltf) i hologramstil i ett fönster. "
-    "Om model_path bara är ett filnamn söks modellen automatiskt i "
-    "gui/frontend/models/.",
-    parameters={
-        "model_path": {
-            "type": "string",
-            "description": "Filnamn, sökväg eller URL till 3D-modellen",
-        },
-        "window_id": {
-            "type": "string"
-        },
-        "element_id": {
-            "type": "string"
-        },
-        "x": {
-            "type": "integer"
-        },
-        "y": {
-            "type": "integer"
-        },
-    },
-    required=[
-        "model_path",
-        "window_id",
-    ],
-)
+@tool(parse_docstring=True)
 def load_3d_model(
-    model_path,
-    window_id,
-    element_id=None,
-    x=200,
-    y=100,
-):
+    model_path: str,
+    window_id: str,
+    element_id: Optional[str] = None,
+    x: int = 200,
+    y: int = 100,
+) -> dict:
+    """Ladda och rendera en 3D-modell (glb/gltf) i hologramstil i ett
+    fönster. Om model_path bara är ett filnamn söks modellen automatiskt
+    i gui/frontend/models/.
+
+    Args:
+        model_path: Filnamn, sökväg eller URL till 3D-modellen.
+        window_id: Vilket fönster modellen ska visas i.
+        element_id: Valfritt eget id, annars genereras ett.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+    """
     model_url = _normalize_model_path(
         model_path
     )
@@ -926,28 +837,17 @@ def load_3d_model(
     }
 
 
-@tool(
-    "Flytta en redan laddad 3D-modell inuti sin egen scen "
-    "(3D-koordinater, inte skärm-koordinater).",
-    parameters={
-        "element_id": {"type": "string"},
-        "x": {"type": "number"},
-        "y": {"type": "number"},
-        "z": {"type": "number"},
-    },
-    required=[
-        "element_id",
-        "x",
-        "y",
-        "z",
-    ],
-)
-def move_3d_model(
-    element_id,
-    x,
-    y,
-    z,
-):
+@tool(parse_docstring=True)
+def move_3d_model(element_id: str, x: float, y: float, z: float) -> dict:
+    """Flytta en redan laddad 3D-modell inuti sin egen scen
+    (3D-koordinater, inte skärm-koordinater).
+
+    Args:
+        element_id: ID för 3D-elementet.
+        x: Ny X-position i 3D-scenen.
+        y: Ny Y-position i 3D-scenen.
+        z: Ny Z-position i 3D-scenen.
+    """
     el = state.get_element(
         element_id
     )
@@ -981,29 +881,22 @@ def move_3d_model(
     }
 
 
-@tool(
-    "Ändra färg, wireframe-läge eller genomskinlighet på en laddad 3D-modell.",
-    parameters={
-        "element_id": {"type": "string"},
-        "color": {
-            "type": "string",
-            "description": "Hex-färg, t.ex. '#00eaff'",
-        },
-        "wireframe": {
-            "type": "boolean"
-        },
-        "opacity": {
-            "type": "number"
-        },
-    },
-    required=["element_id"],
-)
+@tool(parse_docstring=True)
 def set_3d_model_style(
-    element_id,
-    color=None,
-    wireframe=None,
-    opacity=None,
-):
+    element_id: str,
+    color: Optional[str] = None,
+    wireframe: Optional[bool] = None,
+    opacity: Optional[float] = None,
+) -> dict:
+    """Ändra färg, wireframe-läge eller genomskinlighet på en laddad
+    3D-modell.
+
+    Args:
+        element_id: ID för 3D-elementet.
+        color: Hex-färg, t.ex. '#00eaff'.
+        wireframe: True/False för wireframe-läge.
+        opacity: Genomskinlighet, 0.0-1.0.
+    """
     el = state.get_element(
         element_id
     )
@@ -1077,46 +970,36 @@ variable(
 # inte en dynamisk widget i "elements"-listan - den är fast UI i frontend,
 # men styrs på samma sätt: via websocket-meddelanden + persistent state.
 
-@tool(
-    "Visa, göm, flytta eller ändra storlek på Bobs live-svarswidget (panelen "
-    "som visar text/resonemang/tool calls/interrupts i realtid, normalt "
-    "uppe till höger). Ange bara de fält som ska ändras.",
-    parameters={
-        "visible": {
-            "type": "boolean",
-            "description": "True = visa panelen, False = göm den",
-        },
-        "x": {
-            "type": "integer",
-            "description": "Ny X-position i pixlar (skärm-koordinater)",
-        },
-        "y": {
-            "type": "integer",
-            "description": "Ny Y-position i pixlar",
-        },
-        "w": {
-            "type": "integer",
-            "description": "Ny bredd i pixlar",
-        },
-        "h": {
-            "type": "integer",
-            "description": "Ny höjd i pixlar",
-        },
-    },
-)
+@tool(parse_docstring=True)
 def set_stream_panel(
-    visible=None,
-    x=None,
-    y=None,
-    w=None,
-    h=None,
-):
+    visible: Optional[bool] = None,
+    x: Optional[int] = None,
+    y: Optional[int] = None,
+    w: Optional[int] = None,
+    h: Optional[int] = None,
+    windows: Optional[list] = None,
+) -> dict:
+    """Visa, göm, flytta, ändra storlek på eller välj vilka fönster som
+    ska visa Bobs live-svarswidget (panelen som visar
+    text/resonemang/tool calls/interrupts i realtid, normalt uppe till
+    höger). Ange bara de fält som ska ändras.
+
+    Args:
+        visible: True = visa panelen, False = göm den.
+        x: Ny X-position i pixlar (skärm-koordinater).
+        y: Ny Y-position i pixlar.
+        w: Ny bredd i pixlar.
+        h: Ny höjd i pixlar.
+        windows: Lista med window_id för de fönster som ska visa
+            live-texten. Tom lista = visa i alla öppna fönster.
+    """
     panel = state.update_stream_panel(
         visible=visible,
         x=x,
         y=y,
         w=w,
         h=h,
+        windows=windows,
     )
 
     gui_server.manager.broadcast({
@@ -1127,34 +1010,22 @@ def set_stream_panel(
     return panel
 
 
-@tool(
-    "Ställ in vilka typer av innehåll Bobs live-svarswidget ska visa. Ange "
-    "bara de fält som ska ändras, resten lämnas som de är.",
-    parameters={
-        "text": {
-            "type": "boolean",
-            "description": "Visa Bobs textsvar",
-        },
-        "reasoning": {
-            "type": "boolean",
-            "description": "Visa Bobs resonemang/tankar",
-        },
-        "tool_call_chunk": {
-            "type": "boolean",
-            "description": "Visa verktygsanrop Bob gör",
-        },
-        "interrupt": {
-            "type": "boolean",
-            "description": "Visa interrupts (godkännande-förfrågningar)",
-        },
-    },
-)
+@tool(parse_docstring=True)
 def set_stream_panel_filters(
-    text=None,
-    reasoning=None,
-    tool_call_chunk=None,
-    interrupt=None,
-):
+    text: Optional[bool] = None,
+    reasoning: Optional[bool] = None,
+    tool_call_chunk: Optional[bool] = None,
+    interrupt: Optional[bool] = None,
+) -> dict:
+    """Ställ in vilka typer av innehåll Bobs live-svarswidget ska visa.
+    Ange bara de fält som ska ändras, resten lämnas som de är.
+
+    Args:
+        text: Visa Bobs textsvar.
+        reasoning: Visa Bobs resonemang/tankar.
+        tool_call_chunk: Visa verktygsanrop Bob gör.
+        interrupt: Visa interrupts (godkännande-förfrågningar).
+    """
     panel = state.update_stream_panel(
         filters={
             "text": text,
@@ -1172,11 +1043,10 @@ def set_stream_panel_filters(
     return panel
 
 
-@tool(
-    "Rensa allt innehåll (historik) i Bobs live-svarswidget, utan att ändra "
-    "synlighet, position eller filterinställningar."
-)
-def clear_stream_panel():
+@tool(parse_docstring=True)
+def clear_stream_panel() -> dict:
+    """Rensa allt innehåll (historik) i Bobs live-svarswidget, utan att
+    ändra synlighet, position eller filterinställningar."""
     gui_server.manager.broadcast({
         "type": "stream_panel_clear",
     })
@@ -1184,9 +1054,9 @@ def clear_stream_panel():
     return {"ok": True}
 
 
-@tool(
-    "Läs av aktuellt state för Bobs live-svarswidget: synlighet, position, "
-    "storlek och vilka innehållstyper som visas just nu."
-)
-def get_stream_panel_state():
+@tool(parse_docstring=True)
+def get_stream_panel_state() -> dict:
+    """Läs av aktuellt state för Bobs live-svarswidget: synlighet,
+    position, storlek, vilka innehållstyper som visas och vilka fönster
+    den visas i just nu."""
     return state.get_stream_panel()

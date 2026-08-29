@@ -53,6 +53,36 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+def broadcast_agent_stream(payload: dict):
+    """Skickar Bobs live-text (agent_stream/"turn"-markörer) bara till de
+    fönster som är valda i svarswidgetens fönster-filter
+    (state.get_stream_panel()["windows"]). Tom lista = visa i alla
+    fönster, precis som innan fönster-filtret fanns."""
+    try:
+        enabled_windows = state.get_stream_panel().get("windows") or []
+    except Exception:
+        enabled_windows = []
+
+    if not enabled_windows:
+        manager.broadcast(payload)
+        return
+
+    for window_id in enabled_windows:
+        manager.send(window_id, payload)
+
+
+def broadcast_windows_list():
+    """Skickar aktuell fönsterlista till alla anslutna klienter, så t.ex.
+    kryssrutorna för "vilka fönster ska visa live-texten" hålls i synk när
+    fönster öppnas/stängs."""
+    import gui.backend.window_manager as wm
+
+    try:
+        manager.broadcast({"type": "windows_list", "windows": wm.get_windows()})
+    except Exception:
+        pass
+
+
 def broadcast_agent_monitor(
     agent,
     job_id,
@@ -141,6 +171,17 @@ async def ws_endpoint(websocket: WebSocket, window_id: str):
         ensure_ascii=False,
     ))
 
+    # Skicka aktuell fönsterlista så frontend kan rendera kryssrutorna för
+    # "vilka fönster ska visa live-texten" i inställningsmenyn.
+    try:
+        import gui.backend.window_manager as wm
+        await websocket.send_text(json.dumps(
+            {"type": "windows_list", "windows": wm.get_windows()},
+            ensure_ascii=False,
+        ))
+    except Exception:
+        pass
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -162,9 +203,14 @@ def _handle_event(window_id: str, msg: dict):
     elif mtype == "user_chat_message":
         _handle_user_chat_message(msg.get("content", ""))
     elif mtype == "stream_panel_updated":
-        # Användaren kryssade i/ur en filter-checkbox i kugghjuls-menyn.
-        # Persistera och synka till ev. andra öppna fönster.
-        panel = state.update_stream_panel(filters=msg.get("filters"))
+        # Användaren kryssade i/ur en filter- eller fönster-checkbox i
+        # kugghjuls-menyn. Persistera och synka till ev. andra öppna
+        # fönster. "windows" skickas bara med när fönster-filtret
+        # ändrades (annars None, vilket lämnar det orört).
+        panel = state.update_stream_panel(
+            filters=msg.get("filters"),
+            windows=msg.get("windows"),
+        )
         manager.broadcast({"type": "stream_panel_state", **panel})
 
 

@@ -1,23 +1,19 @@
 """
 registry.py
-Central Tool- & Variabel-registry för Bob:s GUI.
+Variabel-registry för Bob:s GUI.
 
-Det här är hela poängen: lägg till EN funktion, dekorera den med @tool(...),
-och Bob får den automatiskt tillgänglig — utan att du behöver röra något
-annat i systemet. Samma sak för variabler med @variable / ToolRegistry.variable.
+GUI-verktygen (funktioner Bob kan anropa) definieras numera direkt som
+riktiga LangChain-verktyg i gui_tools.py (@tool-dekoratorn från
+langchain_core.tools) - de går via gui.backend.bob_integration.get_langchain_tools()
+istället för att gå omvägen via ett eget registry/schema-bygge.
+
+Den här modulen sköter bara VARIABLER: saker Bob kan läsa och/eller
+skriva som inte är ett "anrop" i vanlig mening, t.ex. Voice Mode eller
+hologram_color. Lägg till en ny med ToolRegistry.variable(...)/@variable,
+så dyker den upp automatiskt i systemprompt-snippeten nedan.
 """
-import inspect
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
-
-
-@dataclass
-class ToolSpec:
-    name: str
-    description: str
-    parameters: Dict[str, Any]  # JSON-schema "properties"
-    required: List[str]
-    func: Callable
 
 
 @dataclass
@@ -31,26 +27,9 @@ class VariableSpec:
 
 
 class ToolRegistry:
-    _tools: Dict[str, ToolSpec] = {}
     _variables: Dict[str, VariableSpec] = {}
 
     # ---- registrering ----
-    @classmethod
-    def tool(cls, description: str, parameters: Optional[Dict[str, Any]] = None,
-              required: Optional[List[str]] = None):
-        """Dekorator: registrerar en Python-funktion som ett verktyg Bob kan anropa."""
-        def decorator(func):
-            name = func.__name__
-            sig = inspect.signature(func)
-            props = parameters or {}
-            req = required if required is not None else [
-                p.name for p in sig.parameters.values()
-                if p.default is inspect.Parameter.empty and p.name != "self"
-            ]
-            cls._tools[name] = ToolSpec(name, description, props, req, func)
-            return func
-        return decorator
-
     @classmethod
     def variable(cls, name: str, description: str, readable: bool = True,
                  writable: bool = False, getter: Optional[Callable] = None,
@@ -59,12 +38,6 @@ class ToolRegistry:
         cls._variables[name] = VariableSpec(name, description, readable, writable, getter, setter)
 
     # ---- anrop ----
-    @classmethod
-    def call(cls, name: str, **kwargs):
-        if name not in cls._tools:
-            raise ValueError(f"Okänt verktyg: {name}")
-        return cls._tools[name].func(**kwargs)
-
     @classmethod
     def get_variable(cls, name: str):
         spec = cls._variables.get(name)
@@ -82,25 +55,6 @@ class ToolRegistry:
 
     # ---- introspektion åt Bob (LLM function-calling) ----
     @classmethod
-    def list_tools(cls) -> List[Dict[str, Any]]:
-        """OpenAI/Ollama-kompatibelt function-calling-schema."""
-        out = []
-        for spec in cls._tools.values():
-            out.append({
-                "type": "function",
-                "function": {
-                    "name": spec.name,
-                    "description": spec.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": spec.parameters,
-                        "required": spec.required,
-                    },
-                },
-            })
-        return out
-
-    @classmethod
     def list_variables(cls) -> List[Dict[str, Any]]:
         return [
             {"name": v.name, "description": v.description,
@@ -110,22 +64,20 @@ class ToolRegistry:
 
     @classmethod
     def system_prompt_snippet(cls) -> str:
-        """Läsbar capability-lista att klistra in i Bob:s systemprompt."""
-        lines = ["## Tillgängliga GUI-verktyg", ""]
-        for spec in cls._tools.values():
-            params = ", ".join(spec.parameters.keys())
-            lines.append(f"- **{spec.name}({params})** — {spec.description}")
-        if cls._variables:
-            lines.append("\n## Tillgängliga variabler")
-            for v in cls._variables.values():
-                rw = []
-                if v.readable:
-                    rw.append("läs")
-                if v.writable:
-                    rw.append("skriv")
-                lines.append(f"- **{v.name}** ({'/'.join(rw)}) — {v.description}")
+        """Läsbar capability-lista över variabler att klistra in i Bob:s
+        systemprompt (verktygslistan byggs separat, se bob_integration.py)."""
+        if not cls._variables:
+            return ""
+
+        lines = ["\n## Tillgängliga variabler"]
+        for v in cls._variables.values():
+            rw = []
+            if v.readable:
+                rw.append("läs")
+            if v.writable:
+                rw.append("skriv")
+            lines.append(f"- **{v.name}** ({'/'.join(rw)}) — {v.description}")
         return "\n".join(lines)
 
 
-tool = ToolRegistry.tool
 variable = ToolRegistry.variable
