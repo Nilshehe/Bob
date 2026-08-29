@@ -71,6 +71,10 @@ function handleMessage(msg) {
       handleAgentStream(msg);
       break;
 
+    case "agent_monitor_update":
+      handleAgentMonitorUpdate(msg);
+      break;
+
 
     case "stream_panel_state":
       applyStreamPanelState(msg);
@@ -432,6 +436,60 @@ function buildBody(
     body.appendChild(bar);
 
   }
+
+
+  else if (type === "agent_monitor") {
+
+    const monitor =
+      document.createElement("div");
+
+    monitor.className =
+      "agent-monitor";
+
+    monitor.dataset.agent =
+      props.agent || "";
+
+    monitor.dataset.status =
+      String(props.status || "IDLE").toLowerCase();
+
+    monitor.innerHTML = `
+      <div class="agent-monitor-status">
+        <span class="agent-monitor-dot"></span>
+        <span class="agent-monitor-status-text">
+          ${props.status || "IDLE"}
+        </span>
+      </div>
+      <div class="agent-monitor-activity">
+        ${props.activity || "Waiting..."}
+      </div>
+      <div class="agent-monitor-progress">
+        <div class="agent-monitor-progress-fill"></div>
+      </div>
+      <div class="agent-monitor-footer">
+        <span class="agent-monitor-step">
+          ${props.step ? "STEP " + props.step : ""}
+        </span>
+        <span class="agent-monitor-tool">
+          ${props.tool || ""}
+        </span>
+        <span class="agent-monitor-job">
+          ${props.job_id ? "JOB " + props.job_id : ""}
+        </span>
+      </div>
+      <div class="agent-monitor-log"></div>
+    `;
+
+    body.appendChild(monitor);
+
+    const fill =
+      monitor.querySelector(
+        ".agent-monitor-progress-fill"
+      );
+
+    fill.style.width =
+      `${props.progress || 0}%`;
+
+  }
 }
 
 
@@ -478,6 +536,129 @@ function applyProgressProps(id, props) {
 }
 
 
+function applyAgentMonitorProps(id, props) {
+  const e =
+    elements[id];
+
+  if (!e) {
+    return;
+  }
+
+  const monitor =
+    e.dom.querySelector(
+      ".agent-monitor"
+    );
+
+  if (!monitor) {
+    return;
+  }
+
+  const status =
+    monitor.querySelector(
+      ".agent-monitor-status-text"
+    );
+
+  const activity =
+    monitor.querySelector(
+      ".agent-monitor-activity"
+    );
+
+  const fill =
+    monitor.querySelector(
+      ".agent-monitor-progress-fill"
+    );
+
+  const tool =
+    monitor.querySelector(
+      ".agent-monitor-tool"
+    );
+
+  const job =
+    monitor.querySelector(
+      ".agent-monitor-job"
+    );
+
+  const step =
+    monitor.querySelector(
+      ".agent-monitor-step"
+    );
+
+  if (props.status !== undefined && status) {
+    status.textContent =
+      props.status;
+    monitor.dataset.status =
+      String(props.status).toLowerCase();
+  }
+
+  if (props.activity !== undefined && activity) {
+    activity.textContent =
+      props.activity;
+  }
+
+  if (props.progress !== undefined && fill) {
+    fill.style.width =
+      `${Math.max(0, Math.min(100, props.progress))}%`;
+  }
+
+  if (props.tool !== undefined && tool) {
+    tool.textContent =
+      props.tool;
+  }
+
+  if (props.step !== undefined && step) {
+    step.textContent =
+      props.step ? `STEP ${props.step}` : "";
+  }
+
+  if (props.job_id !== undefined && job) {
+    job.textContent =
+      props.job_id
+        ? `JOB ${props.job_id}`
+        : "";
+  }
+
+  if (props.activity !== undefined) {
+    const log =
+      monitor.querySelector(
+        ".agent-monitor-log"
+      );
+
+    if (log && props.activity) {
+      const entry =
+        document.createElement("div");
+
+      entry.className =
+        "agent-monitor-log-entry";
+
+      const time =
+        new Date().toLocaleTimeString(
+          [],
+          { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+        );
+
+      const stepPrefix =
+        props.step ? `#${props.step} ` : "";
+
+      entry.innerHTML =
+        `<span class="agent-monitor-log-time">${time}</span>` +
+        `<span class="agent-monitor-log-text"></span>`;
+
+      entry.querySelector(
+        ".agent-monitor-log-text"
+      ).textContent = stepPrefix + props.activity;
+
+      log.appendChild(entry);
+
+      while (log.children.length > 12) {
+        log.removeChild(log.firstChild);
+      }
+
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+}
+
+
 function applyToggleProps(id, props) {
   const e =
     elements[id];
@@ -521,6 +702,16 @@ function applyToggleProps(id, props) {
       formatToggleValue(
         props.value
       );
+  }
+
+  if (
+    fields.props &&
+    e.type === "agent_monitor"
+  ) {
+    applyAgentMonitorProps(
+      id,
+      fields.props
+    );
   }
 }
 
@@ -1088,6 +1279,44 @@ function applyHologramMaterial(
             props.opacity ??
             0.85,
         });
+    }
+  );
+}
+
+function handleAgentMonitorUpdate(msg) {
+  Object.entries(elements).forEach(
+    ([id, element]) => {
+      if (element.type !== "agent_monitor") {
+        return;
+      }
+
+      const monitor =
+        element.dom.querySelector(
+          ".agent-monitor"
+        );
+
+      if (!monitor) {
+        return;
+      }
+
+      if (
+        monitor.dataset.agent &&
+        monitor.dataset.agent !== msg.agent
+      ) {
+        return;
+      }
+
+      applyAgentMonitorProps(
+        id,
+        {
+          status: msg.status,
+          activity: msg.activity,
+          progress: msg.progress,
+          tool: msg.tool,
+          job_id: msg.job_id,
+          step: msg.step,
+        }
+      );
     }
   );
 }

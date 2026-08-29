@@ -223,6 +223,95 @@ def create_element(
 
 
 @tool(
+    "Skapa en live-monitor för Code AI, Research AI eller Edit AI. "
+    "Monitorn visar status, aktuell aktivitet, progress, verktyg och job_id.",
+    parameters={
+        "agent": {
+            "type": "string",
+            "enum": [
+                "code_ai",
+                "research_ai",
+                "edit_ai",
+            ],
+            "description": "Vilken AI som ska övervakas",
+        },
+        "window_id": {
+            "type": "string",
+            "description": "Vilket fönster monitorn ska skapas i",
+        },
+        "x": {"type": "integer"},
+        "y": {"type": "integer"},
+        "w": {"type": "integer"},
+        "h": {"type": "integer"},
+        "label": {"type": "string"},
+        "element_id": {"type": "string"},
+    },
+    required=["agent", "window_id"],
+)
+def create_agent_monitor(
+    agent,
+    window_id,
+    x=40,
+    y=40,
+    w=320,
+    h=240,
+    label=None,
+    element_id=None,
+):
+    if agent not in {
+        "code_ai",
+        "research_ai",
+        "edit_ai",
+    }:
+        raise ValueError(
+            f"Okänd agent: {agent}"
+        )
+
+    names = {
+        "code_ai": "CODE AI",
+        "research_ai": "RESEARCH AI",
+        "edit_ai": "EDIT AI",
+    }
+
+    element_id = (
+        element_id
+        or f"agent_monitor_{uuid.uuid4().hex[:6]}"
+    )
+
+    state.upsert_element(
+        element_id,
+        type="agent_monitor",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label or names[agent],
+        visible=True,
+        props={
+            "agent": agent,
+            "status": "IDLE",
+            "activity": "Waiting...",
+            "progress": 0,
+            "tool": "",
+            "job_id": "",
+            "step": 0,
+        },
+    )
+
+    _send_create_element(
+        window_id,
+        element_id,
+    )
+
+    return {
+        "ok": True,
+        "element_id": element_id,
+        "agent": agent,
+    }
+
+
+@tool(
     "Skapa en knapp som visar aktuellt värde för en registrerad variabel "
     "(t.ex. 'Voice Mode') och byter värdet (true/false) varje gång "
     "användaren klickar på den. Variabeln måste vara läsbar och skrivbar "

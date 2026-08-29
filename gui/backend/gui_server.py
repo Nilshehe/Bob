@@ -52,6 +52,39 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+
+def broadcast_agent_monitor(
+    agent,
+    job_id,
+    status=None,
+    activity=None,
+    progress=None,
+    tool=None,
+    step=None,
+):
+    payload = {
+        "type": "agent_monitor_update",
+        "agent": agent,
+        "job_id": job_id,
+    }
+
+    if status is not None:
+        payload["status"] = status
+    if activity is not None:
+        payload["activity"] = activity
+    if progress is not None:
+        payload["progress"] = progress
+    if tool is not None:
+        payload["tool"] = tool
+    if step is not None:
+        payload["step"] = step
+
+    try:
+        manager.broadcast(payload)
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------
 # Bro till Bob:s agent-loop (main.py körs i en egen tråd/event-loop, skild
 # från den här FastAPI/uvicorn-loopen). main.py anropar register_bridge_loop

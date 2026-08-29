@@ -1,16 +1,24 @@
 import asyncio
+import html
 import os
+import re
 import uuid
 import threading
 import contextvars
 from pathlib import Path
 
+import requests
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 
-from tools.ddgs_tool import web_search
+from tools.ddgs_tool import web_search as _web_search_impl
 from tools.code_ai import code_ai, code_ai_status
+import gui.backend.gui_server as gui_server
+
+FETCH_TIMEOUT = 15          # sekunder per web_fetch-anrop
+FETCH_MAX_CHARS = 15_000    # skydd mot att en enda sida svämmar över kontexten
+FETCH_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; BobResearchAI/1.0)"}
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +69,39 @@ def _current_research_path() -> Path:
     return WORKSPACE_DIR / f"{job_id}_research.md"
 
 
+def _monitor_update(
+    job_id,
+    status=None,
+    activity=None,
+    progress=None,
+    tool=None,
+    step=None,
+):
+    try:
+        gui_server.broadcast_agent_monitor(
+            "research_ai",
+            job_id,
+            status=status,
+            activity=activity,
+            progress=progress,
+            tool=tool,
+            step=step,
+        )
+    except Exception:
+        pass
+
+
+def _incr_step(job_id):
+    """Bump and return this job's tool-call step counter, for a more
+    granular activity trail in the GUI monitor. Returns None if there is
+    no active job (e.g. an ad-hoc/manual call)."""
+    job = _jobs.get(job_id)
+    if job is None:
+        return None
+    job["_step"] = job.get("_step", 0) + 1
+    return job["_step"]
+
+
 # ---------------------------------------------------------------------------
 # Research workspace tools
 # ---------------------------------------------------------------------------
@@ -68,6 +109,13 @@ def _current_research_path() -> Path:
 @tool
 def save_research(content: str, section: str = "Research") -> str:
     """Save research to the current file."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity=f"Saving research notes ({section})...",
+        tool="save_research",
+        step=_incr_step(job_id),
+    )
     path = _current_research_path()
     with path.open("a", encoding="utf-8") as f:
         f.write(f"\n\n## {section}\n\n")
@@ -79,19 +127,141 @@ def save_research(content: str, section: str = "Research") -> str:
 @tool
 def read_research() -> str:
     """Read research from the current file."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity="Reading saved research...",
+        tool="read_research",
+        step=_incr_step(job_id),
+    )
     path = _current_research_path()
     if not path.exists():
         return "No research has been saved yet."
     return path.read_text(encoding="utf-8")
 
 
+def _sources_path() -> Path:
+    job_id = _job_id_var.get()
+    if job_id == "adhoc":
+        return WORKSPACE_DIR / "adhoc_sources.md"
+    return WORKSPACE_DIR / f"{job_id}_sources.md"
+
+
+@tool
+def save_source(url: str, note: str = "") -> str:
+    """Record a source URL (with an optional short note on what it says or
+    why it matters) in this job's running bibliography, separate from the
+    main research notes. Use this whenever `web_search` or `fetch_page`
+    turns up something you rely on, so the final report can cite real,
+    tracked sources instead of ones recalled from memory."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity=f"Recording source: {url}...",
+        tool="save_source",
+        step=_incr_step(job_id),
+    )
+    path = _sources_path()
+    with path.open("a", encoding="utf-8") as f:
+        line = f"- {url}"
+        if note.strip():
+            line += f" — {note.strip()}"
+        f.write(line + "\n")
+    return f"Source saved to {path}"
+
+
+@tool
+def list_sources() -> str:
+    """List every source saved so far in the current job with
+    `save_source`."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity="Reviewing saved sources...",
+        tool="list_sources",
+        step=_incr_step(job_id),
+    )
+    path = _sources_path()
+    if not path.exists():
+        return "No sources saved yet."
+    return path.read_text(encoding="utf-8")
+
+
 @tool
 def list_research_files() -> str:
     """List all research files in the workspace."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity="Listing research files...",
+        tool="list_research_files",
+        step=_incr_step(job_id),
+    )
     files = sorted(WORKSPACE_DIR.glob("*.md"))
     if not files:
         return "No research files exist yet."
     return "\n".join(str(path) for path in files)
+
+
+def _html_to_text(raw_html: str) -> str:
+    """Very small, dependency-free HTML-to-text extractor: strips scripts,
+    styles, and tags, and collapses whitespace. Good enough to read the
+    actual content of a page rather than raw markup."""
+    text = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw_html)
+    text = re.sub(r"(?is)<br\s*/?>|</p>|</div>|</li>|</h[1-6]>", "\n", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    return text.strip()
+
+
+@tool
+def fetch_page(url: str) -> str:
+    """Fetch a web page by URL and return its readable text content
+    (HTML tags stripped). Use this after `web_search` when a result looks
+    important and you need the full page, not just the short snippet
+    `web_search` returns. Long pages are truncated."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity=f"Fetching {url}...",
+        tool="fetch_page",
+        step=_incr_step(job_id),
+    )
+    try:
+        resp = requests.get(url, headers=FETCH_HEADERS, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return f"ERROR: could not fetch {url}: {exc}"
+
+    content_type = resp.headers.get("Content-Type", "")
+    if "text/html" in content_type or "<html" in resp.text[:500].lower():
+        text = _html_to_text(resp.text)
+    else:
+        text = resp.text
+
+    if len(text) > FETCH_MAX_CHARS:
+        text = text[:FETCH_MAX_CHARS] + f"\n\n[...truncated, {len(text)} chars total]"
+
+    if not text.strip():
+        return f"Fetched {url} but found no readable text content."
+    return text
+
+
+@tool
+def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web for `query` and return up to `max_results` short
+    result snippets. Use `fetch_page` afterwards to read a promising
+    result's full page content."""
+    job_id = _job_id_var.get()
+    _monitor_update(
+        job_id,
+        activity=f"Searching web: '{query}'...",
+        tool="web_search",
+        step=_incr_step(job_id),
+    )
+    return _web_search_impl.invoke({"query": query, "max_results": max_results})
 
 
 # ---------------------------------------------------------------------------
@@ -100,8 +270,11 @@ def list_research_files() -> str:
 
 RESEARCH_TOOLS = [
     web_search,
+    fetch_page,
     save_research,
     read_research,
+    save_source,
+    list_sources,
     list_research_files,
     code_ai,
     code_ai_status,
@@ -126,13 +299,17 @@ WORKFLOW:
 1. Understand exactly what the user wants to know.
 2. Break the question into relevant subtopics.
 3. Search the web using `web_search`.
-4. Follow up important results with new, more specific searches.
+4. Follow up important results with new, more specific searches. When a
+   result's snippet isn't enough — you need the full article, docs page,
+   or data — use `fetch_page` on its URL to read the actual content.
 5. Compare multiple sources when relevant.
 6. Check for contradictions and aim to find the most reliable information.
 7. Prioritize primary sources, official documentation, academic research,
    and other credible sources when available.
 8. Note dates and whether information may have changed.
-9. Save research incrementally with `save_research`.
+9. Save research incrementally with `save_research`, and record every URL
+   you actually rely on with `save_source` (with a short note on what it
+   says). Use `list_sources` to review the running bibliography.
 10. Read previously saved research with `read_research` before duplicating work.
 11. If the task requires programming, technical analysis, or testing you may
     use `code_ai`. `code_ai` runs asynchronously. Use `code_ai_status` to
@@ -154,8 +331,8 @@ SOURCE GUIDELINES:
 - Distinguish between what sources actually state and your own conclusions.
 - If two sources contradict each other, note it and investigate further.
 - Use as many searches as necessary to verify important claims.
-- Save relevant URLs/source identifiers in the research file when `web_search`
-  returns them.
+- Save every URL/source identifier you rely on with `save_source` when
+  `web_search` or `fetch_page` returns them.
 
 ABOUT `code_ai`:
 - `code_ai` is asynchronous and returns a job_id.
@@ -201,10 +378,27 @@ threading.Thread(
 async def _execute_job(job_id: str, task: str) -> None:
     job = _jobs[job_id]
     job["status"] = "running"
+    job["_step"] = 0
+
+    _monitor_update(
+        job_id,
+        status="RUNNING",
+        activity="Starting research...",
+        progress=0,
+        step=0,
+    )
 
     token = _job_id_var.set(job_id)
 
     try:
+        _monitor_update(
+            job_id,
+            status="RUNNING",
+            activity="Researching...",
+            progress=10,
+            step=0,
+        )
+
         result = await _research_agent.ainvoke(
             {
                 "messages": [
@@ -219,6 +413,12 @@ async def _execute_job(job_id: str, task: str) -> None:
 
     except Exception as exc:
         job["status"] = "failed"
+        _monitor_update(
+            job_id,
+            status="FAILED",
+            activity="Research failed",
+            step=job.get("_step"),
+        )
         job["result"] = f"Research agent failed:\n{exc}"
 
         if _notify_callback:
@@ -257,15 +457,19 @@ async def _execute_job(job_id: str, task: str) -> None:
         f.write("\n")
 
     job["status"] = "done"
+    _monitor_update(
+        job_id,
+        status="DONE",
+        activity="Research complete",
+        progress=100,
+        step=job.get("_step"),
+    )
     job["research_file"] = str(new_path)
     job["result"] = (
         f"Research complete.\n\n"
         f"Research file: {new_path}\n\n"
         f"Summary:\n{final_message}"
     )
-    if _notify_callback:
-        _notify_callback(job_id, job["result"])
-
     if _notify_callback:
         _notify_callback(job_id, job["result"])
 
@@ -291,6 +495,7 @@ def research_ai(task: str) -> str:
         "status": "queued",
         "result": None,
         "research_file": str(research_path),
+        "_step": 0,
     }
 
     asyncio.run_coroutine_threadsafe(

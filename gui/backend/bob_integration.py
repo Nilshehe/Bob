@@ -116,6 +116,14 @@ def gui_system_prompt() -> str:
         "You control a dynamic holographic GUI. You can create, move, "
         "modify, and delete elements, as well as manage multiple windows "
         "across multiple screens using the tools below."
+        "\n\nAGENT MONITOR:\n"
+        "Use create_agent_monitor when the user wants to see a background "
+        "agent working live. Supported agents are code_ai, research_ai, "
+        "and edit_ai. For example, when the user says 'visa vad Research AI "
+        "gör' or 'lägg till en monitor för Research AI', create a "
+        "research_ai agent monitor in an existing window. Do not guess a "
+        "window_id; use one of the exact currently open window_id values "
+        "listed above."
         + ToolRegistry.system_prompt_snippet()
         + windows_block
     )

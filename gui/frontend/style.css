@@ -89,6 +89,168 @@ html, body {
 .gui-element.type-3d .body { padding: 0; }
 .gui-element.type-3d canvas { width: 100%; height: 100%; display: block; }
 
+.gui-element.type-agent_monitor .body {
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.agent-monitor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.agent-monitor-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.agent-monitor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--holo-blue);
+  box-shadow: 0 0 8px var(--holo-blue);
+  flex-shrink: 0;
+}
+
+.agent-monitor-activity {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.85;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.agent-monitor-progress {
+  width: 100%;
+  height: 7px;
+  border-radius: 5px;
+  background: rgba(0, 234, 255, 0.08);
+  overflow: hidden;
+}
+
+.agent-monitor-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--holo-blue);
+  box-shadow: 0 0 8px var(--holo-blue);
+  transition: width 0.25s ease;
+}
+
+.agent-monitor-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 9px;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.agent-monitor-step,
+.agent-monitor-tool,
+.agent-monitor-job {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-monitor-step {
+  color: var(--holo-blue);
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.agent-monitor-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 234, 255, 0.12);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 234, 255, 0.4) transparent;
+}
+
+.agent-monitor-log-entry {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.agent-monitor-log-entry:last-child {
+  opacity: 1;
+}
+
+.agent-monitor-log-time {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--holo-blue);
+  opacity: 0.6;
+}
+
+.agent-monitor-log-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-monitor[data-status="running"] .agent-monitor-dot {
+  animation: agent-monitor-pulse 1s ease-in-out infinite;
+}
+
+.agent-monitor[data-status="done"] .agent-monitor-dot {
+  background: #2ee6a6;
+  box-shadow: 0 0 8px #2ee6a6;
+}
+
+.agent-monitor[data-status="done"] .agent-monitor-progress-fill {
+  background: #2ee6a6;
+  box-shadow: 0 0 8px #2ee6a6;
+}
+
+.agent-monitor[data-status="failed"] .agent-monitor-dot {
+  background: #ff4d5e;
+  box-shadow: 0 0 8px #ff4d5e;
+  animation: none;
+}
+
+.agent-monitor[data-status="failed"] .agent-monitor-progress-fill {
+  background: #ff4d5e;
+  box-shadow: 0 0 8px #ff4d5e;
+}
+
+.agent-monitor[data-status="idle"] .agent-monitor-dot {
+  opacity: 0.4;
+  animation: none;
+  box-shadow: none;
+}
+
+@keyframes agent-monitor-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+
+  50% {
+    transform: scale(1.5);
+    opacity: 1;
+  }
+}
+
 .resize-handle {
   position: absolute; right: 0; bottom: 0; width: 14px; height: 14px;
   cursor: nwse-resize;
@@ -308,6 +470,36 @@ html, body {
   padding: 8px 10px;
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* =====================================================================
+   Bob holographic scrollbar
+   ===================================================================== */
+
+#stream-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 234, 255, 0.55) rgba(0, 234, 255, 0.04);
+}
+
+#stream-body::-webkit-scrollbar {
+  width: 7px;
+}
+
+#stream-body::-webkit-scrollbar-track {
+  background: rgba(0, 234, 255, 0.03);
+  border-left: 1px solid rgba(0, 234, 255, 0.08);
+}
+
+#stream-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 234, 255, 0.45);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 234, 255, 0.25);
+  box-shadow: 0 0 8px rgba(0, 234, 255, 0.35);
+}
+
+#stream-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 234, 255, 0.75);
+  box-shadow: 0 0 12px rgba(0, 234, 255, 0.6);
 }
 
 .stream-line { margin-bottom: 4px; white-space: pre-wrap; word-break: break-word; }

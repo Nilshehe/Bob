@@ -4,6 +4,14 @@
       "title": "Bob",
       "w": 1000,
       "h": 650
+    },
+    "38c29d3b": {
+      "title": "Code AI & Edit AI Panel",
+      "x": 60,
+      "y": 60,
+      "w": 800,
+      "h": 600,
+      "screen": 0
     }
   },
   "elements": {
@@ -42,26 +50,45 @@
     "bob_text": {
       "type": "text",
       "window_id": "main",
-      "x": 386,
-      "y": 232,
-      "w": 428,
-      "h": 295,
+      "x": 1177,
+      "y": 165,
+      "w": 364,
+      "h": 153,
       "label": "Bob",
       "visible": true,
       "props": {}
+    },
+    "code_ai_monitor": {
+      "type": "agent_monitor",
+      "window_id": "38c29d3b",
+      "x": 2141,
+      "y": 27,
+      "w": 400,
+      "h": 200,
+      "label": "Code AI Monitor",
+      "visible": true,
+      "props": {
+        "agent": "code_ai",
+        "status": "IDLE",
+        "activity": "Waiting...",
+        "progress": 0,
+        "tool": "",
+        "job_id": "",
+        "step": 0
+      }
     }
   },
   "stream_panel": {
     "visible": true,
-    "x": null,
-    "y": null,
-    "w": 400,
-    "h": null,
+    "x": 0,
+    "y": 0,
+    "w": 800,
+    "h": 600,
     "filters": {
       "text": true,
-      "reasoning": true,
+      "reasoning": false,
       "tool_call_chunk": false,
-      "interrupt": true
+      "interrupt": false
     }
   }
 }

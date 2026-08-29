@@ -118,7 +118,7 @@ from tools.research_ai import research_ai, research_ai_status
 from tools.quit import shutdown_ai
 from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
-from tools.edit_ai import edit_ai, edit_ai_status, apply_edit_files
+from tools.edit_ai import edit_ai, edit_ai_status, apply_edit_files, list_apply_backups, restore_from_backup
 from gui.backend.bob_integration import get_langchain_tools
 gui_tools = get_langchain_tools()
 
@@ -142,6 +142,8 @@ tools = [
     edit_ai,
     edit_ai_status,
     apply_edit_files,
+    list_apply_backups,
+    restore_from_backup,
     # *get_model3d_tools(),
     # *get_model3d_complex_tools()
     *gui_tools
@@ -330,6 +332,7 @@ async def input_loop(input_enabled):
             "type": "user_message",
             "content": user_input
         })
+
 async def event_loop(input_enabled):
     while True:
         event = await event_queue.get()

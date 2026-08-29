@@ -4,14 +4,19 @@ import uuid
 import threading
 import contextvars
 from pathlib import Path
+from ddgs_tool import web_search
 
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 
 CODE_MODEL = os.environ.get("CODE_AI_MODEL", "qwen3:4b")
+import gui.backend.gui_server as gui_server
 EXEC_TIMEOUT = 20          # sekunder per körning av run_python
+SHELL_EXEC_TIMEOUT = int(os.environ.get("CODE_AI_SHELL_TIMEOUT", "30"))  # sekunder per run_shell
 RECURSION_LIMIT = 15       # max antal agent-steg innan vi ger upp
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 
@@ -27,6 +32,39 @@ _notify_callback = None
 def register_notify_callback(fn) -> None:
     global _notify_callback
     _notify_callback = fn
+
+
+def _monitor_update(
+    job_id,
+    status=None,
+    activity=None,
+    progress=None,
+    tool=None,
+    step=None,
+):
+    try:
+        gui_server.broadcast_agent_monitor(
+            "code_ai",
+            job_id,
+            status=status,
+            activity=activity,
+            progress=progress,
+            tool=tool,
+            step=step,
+        )
+    except Exception:
+        pass
+
+
+def _incr_step(job_id):
+    """Bump and return this job's tool-call step counter, for a more
+    granular activity trail in the GUI monitor. Returns None if there is
+    no active job (e.g. an ad-hoc/manual call)."""
+    job = _jobs.get(job_id)
+    if job is None:
+        return None
+    job["_step"] = job.get("_step", 0) + 1
+    return job["_step"]
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +93,14 @@ async def run_python(code: str) -> str:
         job["_attempt"] += 1
         attempt = job["_attempt"]
 
+    _monitor_update(
+        job_id,
+        activity=f"Testing code (attempt {attempt})...",
+        progress=min(90, 20 + attempt * 20),
+        tool="run_python",
+        step=_incr_step(job_id),
+    )
+
     filename = f"{job_id}_v{attempt}.py"
     path = WORKSPACE_DIR / filename
     path.write_text(code, encoding="utf-8")
@@ -80,17 +126,132 @@ async def run_python(code: str) -> str:
     return f"ERROR (exit {proc.returncode})\n{stderr.decode('utf-8', errors='replace').strip()}"
 
 
-CODE_TOOLS = [run_python]
+@tool
+def list_attempts() -> str:
+    """List every code attempt (version) tried so far in the current
+    code_ai job, in order. Use this to see the history of what you've
+    already tried before writing another attempt."""
+    job_id = _job_id_var.get()
+    job = _jobs.get(job_id)
+
+    _monitor_update(
+        job_id,
+        activity="Reviewing previous attempts...",
+        tool="list_attempts",
+        step=_incr_step(job_id),
+    )
+
+    if not job or not job.get("_files"):
+        return "No attempts yet in this job."
+
+    lines = []
+    for p in job["_files"]:
+        marker = " (last successful run)" if p == job.get("_last_success_path") else ""
+        lines.append(f"- {p.name}{marker}")
+    return "\n".join(lines)
+
+
+@tool
+def read_attempt(version: int) -> str:
+    """Read the code from a previous attempt in the current job, by its
+    attempt number (the `attempt N` shown in run_python's progress
+    updates, starting at 1). Use this to see exactly what you tried before
+    when fixing an error, instead of rewriting from scratch."""
+    job_id = _job_id_var.get()
+    job = _jobs.get(job_id)
+
+    _monitor_update(
+        job_id,
+        activity=f"Reading attempt #{version}...",
+        tool="read_attempt",
+        step=_incr_step(job_id),
+    )
+
+    if not job:
+        return "ERROR: No active code_ai job."
+
+    filename = f"{job_id}_v{version}.py"
+    path = WORKSPACE_DIR / filename
+    if not path.exists():
+        return f"ERROR: no attempt #{version} found in this job."
+    return path.read_text(encoding="utf-8")
+
+
+@tool
+async def run_shell(command: str, cwd: str = "") -> str:
+    """Run a shell command in a real terminal (bash) and return its exit
+    code, stdout, and stderr. Use this for anything `run_python` can't do
+    directly: installing packages (e.g. `pip install X --break-system-packages`),
+    git commands, checking what tools/versions are installed, running
+    scripts or compiled binaries, listing/inspecting files, etc.
+
+    Runs from the project root by default. Pass `cwd` (a path relative to
+    the project root) to run somewhere else instead - it must stay inside
+    the project directory. Commands time out after a set number of seconds
+    (kills the process and returns an error) so a hung command can't block
+    the job forever."""
+    job_id = _job_id_var.get()
+
+    _monitor_update(
+        job_id,
+        activity=f"Running: {command[:60]}",
+        tool="run_shell",
+        step=_incr_step(job_id),
+    )
+
+    workdir = PROJECT_ROOT
+    if cwd:
+        candidate = (PROJECT_ROOT / cwd).resolve()
+        root = PROJECT_ROOT.resolve()
+        if candidate != root and root not in candidate.parents:
+            return f"ERROR: cwd '{cwd}' is outside the project directory - not allowed"
+        workdir = candidate
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=str(workdir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as exc:
+        return f"ERROR: could not start command: {exc}"
+
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=SHELL_EXEC_TIMEOUT)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return f"ERROR: Timeout after {SHELL_EXEC_TIMEOUT}s (command killed): {command}"
+
+    out = stdout.decode("utf-8", errors="replace").strip()
+    err = stderr.decode("utf-8", errors="replace").strip()
+
+    parts = [f"exit code: {proc.returncode}"]
+    if out:
+        parts.append(f"stdout:\n{out}")
+    if err:
+        parts.append(f"stderr:\n{err}")
+    return "\n\n".join(parts)
+
+
+CODE_TOOLS = [run_python, run_shell, list_attempts, read_attempt, web_search]
 
 
 SYSTEM_PROMPT = (
-    "You are a coding assistant with access to the `run_python` tool to "
-    "write and execute Python 3 code. Solve the task by writing code, "
-    "running it with `run_python`, and if the run fails — read the error, "
-    "fix the code and run `run_python` again. The code should print results "
-    "using `print()`. Iterate until the code works or you determine the "
-    "task cannot be solved. Always finish with a short textual summary of "
-    "the result — no markdown headers."
+    "You are a coding assistant with access to `run_python` (write and "
+    "execute Python 3 code) and `run_shell` (run real shell/terminal "
+    "commands - installing packages, git, checking tool versions, running "
+    "scripts or binaries, etc.). Solve the task by writing code and/or "
+    "running commands, and if something fails — read the error, fix it, "
+    "and try again. Prefer `run_python` for computation and logic; use "
+    "`run_shell` when you need the actual system/terminal (installing a "
+    "dependency before importing it, running a non-Python tool, checking "
+    "what's installed, and so on). The Python code should print results "
+    "using `print()`. Use `list_attempts` and `read_attempt` if you need to "
+    "recall what you already tried in this job instead of guessing. Iterate "
+    "until the task works or you determine it cannot be solved. Always "
+    "finish with a short textual summary of the result — no markdown "
+    "headers."
 )
 
 _code_agent = create_agent(
@@ -129,6 +290,14 @@ async def _execute_job(job_id: str, task: str) -> None:
     _jobs[job_id]["_attempt"] = 0
     _jobs[job_id]["_files"] = []
     _jobs[job_id]["_last_success_path"] = None
+    _jobs[job_id]["_step"] = 0
+
+    _monitor_update(
+        job_id,
+        status="RUNNING",
+        activity="Starting Code AI...",
+        progress=0,
+    )
 
     token = _job_id_var.set(job_id)
     try:
@@ -142,6 +311,12 @@ async def _execute_job(job_id: str, task: str) -> None:
     except Exception as exc:  # e.g. recursion_limit reached
         job = _jobs[job_id]
         job["status"] = "failed"
+        _monitor_update(
+            job_id,
+            status="FAILED",
+            activity="Code AI failed",
+            step=job.get("_step"),
+        )
         job["result"] = f"### Error\n```\n{exc}\n```"
         _cleanup_files(job["_files"], keep=None)
         if _notify_callback:
@@ -155,6 +330,13 @@ async def _execute_job(job_id: str, task: str) -> None:
     keep = job["_last_success_path"]
 
     job["status"] = "done"
+    _monitor_update(
+        job_id,
+        status="DONE",
+        activity="Code AI complete",
+        progress=100,
+        step=job.get("_step"),
+    )
     file_note = f"`{keep}`" if keep else "no file saved (no successful run step)"
     job["result"] = f"### File\n{file_note}\n\n### Response\n{final_text}"
 
