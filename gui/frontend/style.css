@@ -419,9 +419,19 @@ html, body {
   text-transform: uppercase;
   border-bottom: 1px solid rgba(0, 234, 255, 0.3);
   opacity: 0.9;
+  cursor: grab;
+  user-select: none;
+}
+#stream-header.dragging { cursor: grabbing; }
+
+#stream-header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-#stream-settings-btn {
+#stream-settings-btn,
+#stream-hide-btn {
   background: transparent;
   border: 1px solid rgba(0, 234, 255, 0.4);
   color: var(--holo-blue);
@@ -431,7 +441,23 @@ html, body {
   line-height: 1;
   cursor: pointer;
 }
-#stream-settings-btn:hover { background: rgba(0, 234, 255, 0.15); }
+#stream-settings-btn:hover,
+#stream-hide-btn:hover { background: rgba(0, 234, 255, 0.15); }
+
+/* Resize-handtag nere i högra hörnet, samma stil som gui-elementens. */
+#stream-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: 0.5;
+  background:
+    linear-gradient(135deg, transparent 0 40%, rgba(0, 234, 255, 0.6) 40% 55%, transparent 55% 100%),
+    linear-gradient(135deg, transparent 0 65%, rgba(0, 234, 255, 0.6) 65% 80%, transparent 80% 100%);
+}
+#stream-resize-handle:hover { opacity: 0.9; }
 
 #stream-settings {
   display: none;
@@ -559,6 +585,11 @@ html, body {
 }
 #stream-toggle-tab:hover { opacity: 1; background: rgba(0, 234, 255, 0.15); }
 #stream-toggle-tab.active { opacity: 0; pointer-events: none; }
+
+/* Helt gömd (via ✕-knappen eller Bobs GUI-verktyg): tar bort fliken
+   fysiskt, till skillnad från .active som bara döljer den visuellt.
+   Ctrl+Shift+L tar fram allt igen. */
+#stream-toggle-tab.fully-hidden { display: none; }
 
 /* -----------------------------------------------------------------
    Graf / diagram-widget

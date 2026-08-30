@@ -35,7 +35,10 @@
   <div id="stream-panel">
     <div id="stream-header">
       <span>BOB — live</span>
-      <button id="stream-settings-btn" title="Inställningar">⚙</button>
+      <div id="stream-header-buttons">
+        <button id="stream-settings-btn" title="Inställningar">⚙</button>
+        <button id="stream-hide-btn" title="Göm helt (Ctrl+Shift+L för att ta fram igen)">✕</button>
+      </div>
     </div>
     <div id="stream-settings">
       <label><input type="checkbox" id="show-text" checked> Text</label>
@@ -49,6 +52,7 @@
       <button id="stream-clear-btn">Rensa</button>
     </div>
     <div id="stream-body"></div>
+    <div id="stream-resize-handle" title="Dra för att ändra storlek"></div>
   </div>
 
   <script src="/static/app.js"></script>

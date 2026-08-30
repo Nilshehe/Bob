@@ -7,12 +7,20 @@ inget annat behöver ändras.
 
 Tokenanvändning:
 - add_tokens(agent, tokens) anropas av varje agent (main, code_ai,
-  research_ai, edit_ai) när ett LLM-svar är klart.
-- En bakgrundstråd (start_ticker) skriver var 5:e sekund en ögonblicksbild
-  {agent_namn: använda_tokens, "updated_at": ...} till
-  funktioner/data/token_usage.json, och broadcastar samma ögonblicksbild
-  till alla öppna GUI-fönster (typ "metrics_tick") så att graf-/
-  stortext-widgets uppdateras live.
+  research_ai, edit_ai) när ett LLM-svar är klart. Ackumuleras i
+  _totals (agentens totalsumma sedan senaste nollställning).
+- En bakgrundstråd (start_ticker) räknar var 5:e sekund ut hur mycket
+  varje agents totalsumma har ökat sedan förra ticken (deltat, dvs.
+  ungefärlig tokenanvändning under just de senaste 5 sekunderna) -
+  INTE totalsumman. Det deltat är det som skrivs till
+  funktioner/data/token_usage.json ({agent_namn: tokens_senaste_5s,
+  "interval_seconds": 5, "updated_at": ...}), sparas i tidsserien
+  ("tokens:<agent>") och broadcastas till alla öppna GUI-fönster (typ
+  "metrics_tick"), så att graf-widgets visar spikar vid faktisk
+  användning istället för en ständigt stigande kurva.
+- Totalsumman per agent finns fortfarande kvar och är oförändrad
+  (get_total/_totals) - den nollställs inte av tick-loopen och
+  används av ToolRegistry-variablerna nedan.
 - Alla kända agenters totalsumma registreras också som skriv-/läsbara
   ToolRegistry-variabler ("Token Usage: <agent>"), så Bob själv kan läsa
   eller nollställa dem precis som Voice Mode (_setter-mönstret).
@@ -36,6 +44,10 @@ _lock = threading.Lock()
 _totals: Dict[str, int] = {agent: 0 for agent in KNOWN_AGENTS}
 _series: Dict[str, deque] = {}  # serie_namn -> deque[{"t": epoch, "v": value}]
 _ticker_started = False
+
+# Totalsumma per agent vid senaste tick - används för att räkna ut
+# deltat (tokens sedan förra ticken) i _tick_loop.
+_last_tick_totals: Dict[str, int] = {agent: 0 for agent in KNOWN_AGENTS}
 
 
 # ---------------------------------------------------------------------
@@ -124,11 +136,14 @@ def snapshot_totals() -> Dict[str, int]:
 # Bakgrundstråd: skriv till json + broadcasta var 5:e sekund
 # ---------------------------------------------------------------------
 
-def _write_token_json(totals: Dict[str, int]) -> None:
+def _write_token_json(deltas: Dict[str, int]) -> None:
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
-            "agents": totals,
+            # Tokens använda under det SENASTE intervallet (se
+            # interval_seconds), inte totalsumman sedan start/reset.
+            "agents": deltas,
+            "interval_seconds": TICK_SECONDS,
             "updated_at": time.time(),
         }
         TOKEN_USAGE_FILE.write_text(
@@ -138,12 +153,12 @@ def _write_token_json(totals: Dict[str, int]) -> None:
         pass
 
 
-def _broadcast_tick(totals: Dict[str, int]) -> None:
+def _broadcast_tick(deltas: Dict[str, int]) -> None:
     try:
         import gui.backend.gui_server as gui_server
         gui_server.manager.broadcast({
             "type": "metrics_tick",
-            "tokens": totals,
+            "tokens": deltas,
             "t": time.time(),
         })
     except Exception:
@@ -151,13 +166,24 @@ def _broadcast_tick(totals: Dict[str, int]) -> None:
 
 
 def _tick_loop():
+    global _last_tick_totals
     while True:
         time.sleep(TICK_SECONDS)
         totals = snapshot_totals()
+
+        deltas = {}
         for agent, total in totals.items():
-            record(f"tokens:{agent}", total)
-        _write_token_json(totals)
-        _broadcast_tick(totals)
+            prev = _last_tick_totals.get(agent, 0)
+            # Om totalsumman sjunkit sedan förra ticken (t.ex. Bob
+            # nollställde en agents räknare via reset_tokens) finns
+            # inget meningsfullt delta - räkna det som 0 snarare än
+            # ett negativt tal.
+            deltas[agent] = max(0, total - prev)
+            record(f"tokens:{agent}", deltas[agent])
+
+        _last_tick_totals = totals
+        _write_token_json(deltas)
+        _broadcast_tick(deltas)
 
 
 def start_ticker():

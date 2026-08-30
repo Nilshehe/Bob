@@ -973,6 +973,7 @@ variable(
 @tool(parse_docstring=True)
 def set_stream_panel(
     visible: Optional[bool] = None,
+    tab_hidden: Optional[bool] = None,
     x: Optional[int] = None,
     y: Optional[int] = None,
     w: Optional[int] = None,
@@ -986,6 +987,12 @@ def set_stream_panel(
 
     Args:
         visible: True = visa panelen, False = göm den.
+        tab_hidden: True = göm även den lilla "◈ live"-fliken som
+            annars alltid ligger kvar synlig som väg tillbaka in när
+            panelen är gömd. False = visa fliken igen. Använd med
+            försiktighet - enda vägen tillbaka i UI:t då är
+            snabbkommandot Ctrl+Shift+L eller att sätta det här
+            verktyget till False igen.
         x: Ny X-position i pixlar (skärm-koordinater).
         y: Ny Y-position i pixlar.
         w: Ny bredd i pixlar.
@@ -995,6 +1002,7 @@ def set_stream_panel(
     """
     panel = state.update_stream_panel(
         visible=visible,
+        tab_hidden=tab_hidden,
         x=x,
         y=y,
         w=w,

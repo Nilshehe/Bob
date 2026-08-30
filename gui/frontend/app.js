@@ -1751,12 +1751,16 @@ function handleVoiceState(msg) {
 
 const streamPanel = document.getElementById("stream-panel");
 const streamBody = document.getElementById("stream-body");
+const streamHeader = document.getElementById("stream-header");
 const streamSettingsBtn = document.getElementById("stream-settings-btn");
+const streamHideBtn = document.getElementById("stream-hide-btn");
 const streamSettings = document.getElementById("stream-settings");
 const streamClearBtn = document.getElementById("stream-clear-btn");
 const streamToggleTab = document.getElementById("stream-toggle-tab");
+const streamResizeHandle = document.getElementById("stream-resize-handle");
 
 let streamPanelVisible = true;
+let streamTabHidden = false;
 
 const STREAM_TYPES = ["text", "reasoning", "tool_call_chunk", "interrupt"];
 
@@ -1775,6 +1779,11 @@ function applyStreamPanelState(s) {
   if (typeof s.visible === "boolean") {
     streamPanelVisible = s.visible;
     streamToggleTab.classList.toggle("active", streamPanelVisible);
+  }
+
+  if (typeof s.tab_hidden === "boolean") {
+    streamTabHidden = s.tab_hidden;
+    streamToggleTab.classList.toggle("fully-hidden", streamTabHidden);
   }
 
   if (typeof s.w === "number") {
@@ -1936,6 +1945,158 @@ streamToggleTab.addEventListener("click", () => {
 streamClearBtn.addEventListener("click", () => {
   streamBody.innerHTML = "";
 });
+
+// ---------------------------------------------------------------------
+// Live-svarswidget: gömma helt (panel + flik) och ta fram igen
+// ---------------------------------------------------------------------
+// Skiljer sig från den vanliga toggle-fliken: den fliken ska alltid gå
+// att klicka på för att ta fram panelen igen. Den här knappen gömmer
+// ANDRA fliken också, så det finns ingen väg tillbaka i UI:t förutom
+// snabbkommandot Ctrl+Shift+L (eller att Bob själv sätter tillbaka det
+// via set_stream_panel).
+
+function fullyHideStreamPanel() {
+  streamPanelVisible = false;
+  streamTabHidden = true;
+
+  streamPanel.classList.add("hidden");
+  streamToggleTab.classList.remove("active");
+  streamToggleTab.classList.add("fully-hidden");
+
+  sendEvent({
+    type: "stream_panel_updated",
+    visible: false,
+    tab_hidden: true,
+  });
+}
+
+function unhideStreamPanel() {
+  streamPanelVisible = true;
+  streamTabHidden = false;
+
+  streamPanel.classList.remove("hidden");
+  streamToggleTab.classList.remove("fully-hidden");
+  streamToggleTab.classList.add("active");
+
+  sendEvent({
+    type: "stream_panel_updated",
+    visible: true,
+    tab_hidden: false,
+  });
+}
+
+streamHideBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  fullyHideStreamPanel();
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {
+    e.preventDefault();
+    unhideStreamPanel();
+  }
+});
+
+// ---------------------------------------------------------------------
+// Live-svarswidget: flytta (dra i headern) och ändra storlek (handtag
+// nere till höger). Samma mönster som makeDraggable/makeResizable för
+// vanliga gui-element, men skräddarsytt för panelen eftersom den inte
+// är ett element i "elements"-registret och styrs via
+// stream_panel_updated/stream_panel_state istället för
+// element_moved/element_resized.
+// ---------------------------------------------------------------------
+
+(function makeStreamPanelDraggable() {
+  let sx, sy, ox, oy;
+  let dragging = false;
+
+  streamHeader.addEventListener("mousedown", (e) => {
+    // Låt klick på knapparna i headern (⚙/✕) fungera som vanligt
+    // istället för att starta en drag.
+    if (e.target.closest("button")) {
+      return;
+    }
+
+    dragging = true;
+    streamHeader.classList.add("dragging");
+
+    sx = e.clientX;
+    sy = e.clientY;
+    ox = streamPanel.offsetLeft;
+    oy = streamPanel.offsetTop;
+
+    // Panelen är CSS-positionerad med "right" som standard. Byt till
+    // left/top-styrning så den faktiskt kan dras fritt.
+    streamPanel.style.right = "auto";
+
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) {
+      return;
+    }
+
+    streamPanel.style.left = (ox + e.clientX - sx) + "px";
+    streamPanel.style.top = (oy + e.clientY - sy) + "px";
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!dragging) {
+      return;
+    }
+
+    dragging = false;
+    streamHeader.classList.remove("dragging");
+
+    sendEvent({
+      type: "stream_panel_updated",
+      x: streamPanel.offsetLeft,
+      y: streamPanel.offsetTop,
+    });
+  });
+})();
+
+(function makeStreamPanelResizable() {
+  let sx, sy, sw, sh;
+  let resizing = false;
+
+  streamResizeHandle.addEventListener("mousedown", (e) => {
+    resizing = true;
+
+    sx = e.clientX;
+    sy = e.clientY;
+    sw = streamPanel.offsetWidth;
+    sh = streamPanel.offsetHeight;
+
+    e.stopPropagation();
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!resizing) {
+      return;
+    }
+
+    streamPanel.style.width = Math.max(220, sw + e.clientX - sx) + "px";
+    streamPanel.style.maxHeight = "none";
+    streamPanel.style.height = Math.max(120, sh + e.clientY - sy) + "px";
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!resizing) {
+      return;
+    }
+
+    resizing = false;
+
+    sendEvent({
+      type: "stream_panel_updated",
+      w: streamPanel.offsetWidth,
+      h: streamPanel.offsetHeight,
+    });
+  });
+})();
 
 let currentStreamRun = null;
 

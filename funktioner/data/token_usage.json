@@ -1,9 +1,10 @@
 {
   "agents": {
-    "main": 31614,
+    "main": 0,
     "code_ai": 0,
     "research_ai": 0,
     "edit_ai": 0
   },
-  "updated_at": 1788074623.299534
+  "interval_seconds": 5,
+  "updated_at": 1788076495.4445212
 }

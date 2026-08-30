@@ -14,6 +14,8 @@ from tools.edit_ai import register_notify_callback as register_edit_notify_callb
 from tools.approval_agent import run_approval_conversation
 from voice.tts import speak
 import asyncio
+import sys
+import queue
 import threading
 from funktioner.queue import event_queue
 from funktioner import metrics
@@ -66,6 +68,14 @@ register_edit_notify_callback(_on_edit_job_done)
 
 VOICE_MODE = False
 TALKING = False
+
+# Satt av _set_voice_mode varje gång Voice Mode växlar (oavsett om det
+# är Bob själv, toggle-knappen i GUI:t eller ett annat verktygsanrop som
+# gör det). input_loop nollställer den precis innan den börjar vänta på
+# text/wake word och pollar den under tiden, så att en pågående väntan
+# kan avbrytas direkt istället för att sitta fast tills nästa
+# textrad/wake word råkar komma in.
+_voice_mode_changed = threading.Event()
 
 
 def _broadcast_voice_state(**fields):
@@ -155,6 +165,7 @@ tools = [
 def _set_voice_mode(state: bool):
     global VOICE_MODE
     VOICE_MODE = bool(state)
+    _voice_mode_changed.set()
     _broadcast_voice_state(mode=VOICE_MODE, awake=False, listening=False, level=0.0)
     return f"VOICE MODE is now {'on' if VOICE_MODE else 'off'}"
 
@@ -324,24 +335,93 @@ def resume_after_interrupt(agent, config, decision):
         else:
             continue
 
+def _read_line_cancelable(prompt: str, stop_event: threading.Event, poll_interval: float = 0.25):
+    """Som input(prompt), men pollar stop_event var poll_interval:e sekund
+    istället för att blockera tills en rad faktiskt kommer in, så att
+    väntan kan avbrytas direkt (t.ex. Voice Mode aktiverades via
+    knapptrycket i GUI:t medan vi väntade på text).
+
+    Läser via en egen bakgrundstråd + kö istället för select() på stdin -
+    select() på stdin fungerar bara med riktiga sockets på Windows
+    (WinError 10038), och Bob körs där. En blockerande läsartråd +
+    queue.get(timeout=...) ger samma "avbrytbara väntan" men funkar
+    likadant på Windows/Linux/macOS.
+
+    Returnerar None om stop_event sätts under väntan (eller vid EOF på
+    stdin), annars den inskrivna raden (utan radbrytning). En rad som
+    skrivs in medan vi INTE väntar på text (t.ex. under Voice Mode) blir
+    kvar i kön och levereras nästa gång textläget väntar på input,
+    ungefär som en oläst rad i en vanlig terminal-buffer."""
+    _ensure_stdin_reader()
+    print(prompt, end="", flush=True)
+    while True:
+        if stop_event.is_set():
+            print()  # ny rad så prompten inte hänger kvar mitt i raden
+            return None
+        try:
+            return _stdin_queue.get(timeout=poll_interval)
+        except queue.Empty:
+            continue
+
+
+_stdin_queue: "queue.Queue[str]" = queue.Queue()
+_stdin_reader_started = False
+_stdin_reader_lock = threading.Lock()
+
+
+def _stdin_reader_loop():
+    """Körs i en enda daemon-tråd under hela Bobs livstid. Läser stdin
+    rad för rad (blockerande, precis som input() gjorde) och lägger varje
+    rad i _stdin_queue - _read_line_cancelable konsumerar därifrån med en
+    timeout istället för att själv blockera på stdin."""
+    while True:
+        line = sys.stdin.readline()
+        if line == "":
+            # EOF (stdin stängt/omdirigerat från en tom källa) - inget
+            # mer att läsa, låt tråden dö istället för att snurra tomt.
+            return
+        _stdin_queue.put(line.rstrip("\n"))
+
+
+def _ensure_stdin_reader():
+    global _stdin_reader_started
+    with _stdin_reader_lock:
+        if _stdin_reader_started:
+            return
+        _stdin_reader_started = True
+    threading.Thread(target=_stdin_reader_loop, daemon=True).start()
+
 async def input_loop(input_enabled):
     global VOICE_MODE
     while True:
         await input_enabled.wait()
+
+        # Nollställ precis innan vi börjar vänta, så att den bara fångar
+        # lägesbyten som händer UNDER den här väntan (inte gamla,
+        # redan hanterade byten).
+        _voice_mode_changed.clear()
+
         if VOICE_MODE:
             print("\nWaiting for wake word...")
             _broadcast_voice_state(mode=True, awake=False, listening=True, level=0.0)
             try:
-                await asyncio.to_thread(
+                wake_detected = await asyncio.to_thread(
                     wait_for_wake_word,
                     level_callback=lambda lvl: _broadcast_voice_state(
                         mode=True, awake=False, listening=True, level=lvl
                     ),
+                    stop_event=_voice_mode_changed,
                 )
             except Exception as exc:
                 print(f"\033[31mWake word-lyssningen kraschade: {exc}\033[0m")
                 _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
                 await asyncio.sleep(1.0)
+                continue
+            if not wake_detected:
+                # Voice Mode stängdes av (eller slogs om) medan vi
+                # lyssnade efter wake word - loopa om direkt istället för
+                # att sitta fast tills wake word råkar höras, så bytet
+                # till textläge slår igenom med en gång.
                 continue
             print("Wake word detected.")
             _broadcast_voice_state(mode=True, awake=True, listening=False, level=0.0)
@@ -361,7 +441,15 @@ async def input_loop(input_enabled):
             if not user_input:
                 continue
         else:
-            user_input = await asyncio.to_thread(input, "\nask me anything: ")
+            user_input = await asyncio.to_thread(
+                _read_line_cancelable, "\nask me anything: ", _voice_mode_changed
+            )
+            if user_input is None:
+                # Voice Mode aktiverades medan vi väntade på en textrad
+                # (eller stdin stängdes/EOF) - loopa om direkt istället
+                # för att sitta fast tills en textrad faktiskt skrivs in,
+                # så bytet till röstläge slår igenom med en gång.
+                continue
         input_enabled.clear()
         await event_queue.put({
             "type": "user_message",

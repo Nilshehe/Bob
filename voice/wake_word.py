@@ -157,7 +157,7 @@ def load_templates():
 
 # ================= Live-detektion =================
 
-def wait_for_wake_word(templates=None, level_callback=None):
+def wait_for_wake_word(templates=None, level_callback=None, stop_event=None):
     """
     Blocks until the wake word is heard. Prints DTW distances so you can
     observe that it is listening and how close a match is.
@@ -166,6 +166,12 @@ def wait_for_wake_word(templates=None, level_callback=None):
     med den råa RMS-ljudnivån (oavsett om den passerar ENERGY_GATE eller
     inte) - t.ex. för att driva en GUI-visualisering medan Bob lyssnar
     efter sitt wake word.
+
+    stop_event (threading.Event), om angiven, avbryter lyssningen tidigt
+    (utan att wake word hörts) så fort den är satt - t.ex. för att kunna
+    byta tillbaka till textläge direkt när Voice Mode stängs av, istället
+    för att sitta fast tills wake word råkar höras. Returnerar True om
+    wake word upptäcktes, False om lyssningen avbröts via stop_event.
     """
     if templates is None:
         templates = load_templates()
@@ -198,7 +204,13 @@ def wait_for_wake_word(templates=None, level_callback=None):
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32", callback=wake_callback):
         while True:
+            if stop_event is not None and stop_event.is_set():
+                return False
+
             time.sleep(CHECK_INTERVAL_S)
+
+            if stop_event is not None and stop_event.is_set():
+                return False
 
             level = np.sqrt(np.mean(buf ** 2))
 
@@ -218,7 +230,7 @@ def wait_for_wake_word(templates=None, level_callback=None):
 
             if best < DTW_THRESHOLD:
                 #print(f"\n>> '{WAKE_WORD_LABEL}' upptäckt! (dtw={best:.1f})")
-                return
+                return True
 
 
 if __name__ == "__main__":

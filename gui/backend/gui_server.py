@@ -207,6 +207,11 @@ def _handle_event(window_id: str, msg: dict):
             filters=msg.get("filters"),
             windows=msg.get("windows"),
             visible=msg.get("visible"),
+            tab_hidden=msg.get("tab_hidden"),
+            x=msg.get("x"),
+            y=msg.get("y"),
+            w=msg.get("w"),
+            h=msg.get("h"),
         )
         manager.broadcast({"type": "stream_panel_state", **panel})
     elif mtype == "element_text_changed":

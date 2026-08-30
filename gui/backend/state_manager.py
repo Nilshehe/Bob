@@ -18,6 +18,12 @@ DEFAULT_STATE = {
         # via gui_tools.py (set_stream_panel/set_stream_panel_filters) och
         # av användaren via kugghjulet i frontend.
         "visible": True,
+        # tab_hidden: True gömmer även den lilla "◈ live"-fliken (den
+        # som annars alltid finns kvar som väg tillbaka in när panelen
+        # är gömd). Enda vägen tillbaka då är snabbkommandot
+        # Ctrl+Shift+L i frontend, eller att Bob sätter tillbaka det
+        # via set_stream_panel.
+        "tab_hidden": False,
         "x": None, "y": None, "w": None, "h": None,  # None = CSS-default (uppe till höger)
         "filters": {
             "text": True,
@@ -91,6 +97,7 @@ class StateManager:
         panel = self.state.setdefault("stream_panel", default)
         panel.setdefault("filters", default["filters"])
         panel.setdefault("windows", default["windows"])
+        panel.setdefault("tab_hidden", default["tab_hidden"])
         return panel
 
     def update_stream_panel(self, filters: Dict[str, Any] = None, **fields):
