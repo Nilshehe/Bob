@@ -81,6 +81,11 @@ function handleMessage(msg) {
       break;
 
 
+    case "metrics_tick":
+      handleMetricsTick(msg);
+      break;
+
+
     case "windows_list":
       handleWindowsList(msg);
       break;
@@ -495,6 +500,271 @@ function buildBody(
       `${props.progress || 0}%`;
 
   }
+
+
+  else if (type === "graph") {
+
+    body.appendChild(buildGraphDom(id, props));
+
+  }
+
+
+  else if (type === "big_text") {
+
+    body.parentElement.dataset.variable = props.variable || "";
+
+    const big =
+      document.createElement("div");
+
+    big.className = "big-text-value";
+    big.textContent = props.text ?? "";
+
+    body.appendChild(big);
+
+  }
+
+
+  else if (type === "whiteboard") {
+
+    const area =
+      document.createElement("textarea");
+
+    area.className = "whiteboard-area";
+    area.value = props.text || "";
+    area.placeholder = "Skriv här...";
+
+    let debounceTimer = null;
+
+    area.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        sendEvent({
+          type: "element_text_changed",
+          element_id: id,
+          text: area.value,
+        });
+      }, 400);
+    });
+
+    body.appendChild(area);
+
+  }
+}
+
+
+// ---------------------------------------------------------------------
+// Graf (diagram/graf-widget) - ren canvas, inget externt bibliotek.
+// Håller en lokal punktbuffert per serie (seedad från backend-historiken
+// vid create_element/sync, sedan påfylld live av metrics_tick) och ritar
+// bara punkterna inom det valda tidsintervallet.
+// ---------------------------------------------------------------------
+
+const GRAPH_INTERVALS = [
+  { label: "1 min", seconds: 60 },
+  { label: "5 min", seconds: 300 },
+  { label: "15 min", seconds: 900 },
+  { label: "1 h", seconds: 3600 },
+  { label: "Allt", seconds: null },
+];
+
+const graphs = {}; // id -> { seriesData: {name: [{t,v},...]}, intervalSeconds, canvas, select }
+
+function buildGraphDom(id, props) {
+  const wrap = document.createElement("div");
+  wrap.className = "graph-wrap";
+
+  const controls = document.createElement("div");
+  controls.className = "graph-controls";
+
+  const select = document.createElement("select");
+  GRAPH_INTERVALS.forEach((opt) => {
+    const o = document.createElement("option");
+    o.value = String(opt.seconds);
+    o.textContent = opt.label;
+    select.appendChild(o);
+  });
+  select.value = String(props.interval_s || 300);
+
+  controls.appendChild(select);
+  wrap.appendChild(controls);
+
+  const canvas = document.createElement("canvas");
+  canvas.className = "graph-canvas";
+  wrap.appendChild(canvas);
+
+  const seriesData = {};
+  (props.series || []).forEach((name) => {
+    seriesData[name] = ((props.history || {})[name] || []).map((p) => ({ t: p.t, v: Number(p.v) || 0 }));
+  });
+
+  graphs[id] = {
+    seriesData,
+    seriesNames: props.series || [],
+    intervalSeconds: select.value === "null" ? null : Number(select.value),
+    canvas,
+  };
+
+  select.addEventListener("change", () => {
+    graphs[id].intervalSeconds = select.value === "null" ? null : Number(select.value);
+    drawGraph(id);
+  });
+
+  // Rita om vid storleksändring av elementet (resize-handtaget ändrar
+  // bara CSS-storlek på wrappern, canvasens pixelbuffert måste synkas).
+  requestAnimationFrame(() => drawGraph(id));
+
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => drawGraph(id));
+    ro.observe(wrap);
+  }
+
+  return wrap;
+}
+
+const GRAPH_COLORS = ["#00eaff", "#ff5fd1", "#ffd166", "#7dff8f"];
+
+function drawGraph(id) {
+  const g = graphs[id];
+  if (!g || !g.canvas || !g.canvas.isConnected) {
+    return;
+  }
+
+  const canvas = g.canvas;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = Math.max(20, rect.width);
+  const h = Math.max(20, rect.height - 28);
+
+  canvas.width = w;
+  canvas.height = h;
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+
+  const now = Date.now() / 1000;
+  const since = g.intervalSeconds ? now - g.intervalSeconds : 0;
+
+  let minV = Infinity;
+  let maxV = -Infinity;
+  const visible = {};
+
+  g.seriesNames.forEach((name) => {
+    const pts = (g.seriesData[name] || []).filter((p) => p.t >= since);
+    visible[name] = pts;
+    pts.forEach((p) => {
+      if (p.v < minV) minV = p.v;
+      if (p.v > maxV) maxV = p.v;
+    });
+  });
+
+  if (!isFinite(minV) || !isFinite(maxV)) {
+    ctx.fillStyle = "rgba(0, 234, 255, 0.5)";
+    ctx.font = "11px monospace";
+    ctx.fillText("Väntar på data...", 6, h / 2);
+    return;
+  }
+
+  if (minV === maxV) {
+    minV -= 1;
+    maxV += 1;
+  }
+
+  const tMin = since || Math.min(...g.seriesNames.flatMap((n) => visible[n].map((p) => p.t)), now - 60);
+  const tMax = now;
+
+  const x = (t) => ((t - tMin) / Math.max(1, tMax - tMin)) * (w - 8) + 4;
+  const y = (v) => h - 4 - ((v - minV) / (maxV - minV)) * (h - 8);
+
+  g.seriesNames.forEach((name, i) => {
+    const pts = visible[name];
+    if (pts.length === 0) return;
+
+    ctx.strokeStyle = GRAPH_COLORS[i % GRAPH_COLORS.length];
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    pts.forEach((p, idx) => {
+      const px = x(p.t);
+      const py = y(p.v);
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  });
+}
+
+function applyGraphProps(id, props) {
+  const g = graphs[id];
+  if (!g) return;
+
+  if (props.history) {
+    Object.entries(props.history).forEach(([name, pts]) => {
+      g.seriesData[name] = (pts || []).map((p) => ({ t: p.t, v: Number(p.v) || 0 }));
+    });
+  }
+
+  drawGraph(id);
+}
+
+function handleMetricsTick(msg) {
+  const t = msg.t || Date.now() / 1000;
+
+  Object.entries(graphs).forEach(([id, g]) => {
+    g.seriesNames.forEach((name) => {
+      // Serienamnen för tokens följer alltid "tokens:<agent>".
+      if (!name.startsWith("tokens:")) return;
+      const agent = name.slice("tokens:".length);
+      if (!(agent in (msg.tokens || {}))) return;
+
+      const buf = g.seriesData[name] || (g.seriesData[name] = []);
+      buf.push({ t, v: msg.tokens[agent] });
+      if (buf.length > 2000) buf.shift();
+    });
+    drawGraph(id);
+  });
+
+  // Stortext-widgets bundna till en Token Usage-variabel uppdateras live
+  // samma väg, utan att behöva en separat polling-loop i frontend.
+  Object.entries(elements).forEach(([id, el]) => {
+    if (el.type !== "big_text") return;
+    const varName = el.dom.dataset.variable;
+    if (!varName || !varName.startsWith("Token Usage: ")) return;
+    const agent = varName.slice("Token Usage: ".length);
+    if (!(agent in (msg.tokens || {}))) return;
+    const valueEl = el.dom.querySelector(".big-text-value");
+    if (valueEl) valueEl.textContent = String(msg.tokens[agent]);
+  });
+}
+
+
+function applyBigTextProps(id, props) {
+  const e = elements[id];
+  if (!e) return;
+
+  if (props.variable !== undefined) {
+    e.dom.dataset.variable = props.variable || "";
+  }
+
+  if (props.text !== undefined) {
+    const valueEl = e.dom.querySelector(".big-text-value");
+    if (valueEl) valueEl.textContent = props.text;
+  }
+}
+
+
+function applyWhiteboardProps(id, props) {
+  const e = elements[id];
+  if (!e || props.text === undefined) return;
+
+  const area = e.dom.querySelector(".whiteboard-area");
+  if (!area) return;
+
+  // Skriv inte över det användaren just nu håller på att skriva i den
+  // här rutan - annars rycks markören undan varje gång Bob (eller ett
+  // annat fönster) uppdaterar samma whiteboard.
+  if (document.activeElement === area) return;
+
+  if (area.value !== props.text) {
+    area.value = props.text;
+  }
 }
 
 
@@ -737,6 +1007,7 @@ function removeElementDom(id) {
 
   delete elements[id];
   delete three[id];
+  delete graphs[id];
 }
 
 
@@ -849,6 +1120,30 @@ function updateElementDom(
       id,
       fields.props
     );
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "graph"
+  ) {
+    applyGraphProps(id, fields.props);
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "big_text"
+  ) {
+    applyBigTextProps(id, fields.props);
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "whiteboard"
+  ) {
+    applyWhiteboardProps(id, fields.props);
   }
 }
 
@@ -1459,6 +1754,9 @@ const streamBody = document.getElementById("stream-body");
 const streamSettingsBtn = document.getElementById("stream-settings-btn");
 const streamSettings = document.getElementById("stream-settings");
 const streamClearBtn = document.getElementById("stream-clear-btn");
+const streamToggleTab = document.getElementById("stream-toggle-tab");
+
+let streamPanelVisible = true;
 
 const STREAM_TYPES = ["text", "reasoning", "tool_call_chunk", "interrupt"];
 
@@ -1473,6 +1771,11 @@ function applyStreamPanelState(s) {
   applyingRemotePanelState = true;
 
   streamPanel.classList.toggle("hidden", s.visible === false);
+
+  if (typeof s.visible === "boolean") {
+    streamPanelVisible = s.visible;
+    streamToggleTab.classList.toggle("active", streamPanelVisible);
+  }
 
   if (typeof s.w === "number") {
     streamPanel.style.width = s.w + "px";
@@ -1618,6 +1921,16 @@ function handleWindowsList(msg) {
 
 streamSettingsBtn.addEventListener("click", () => {
   streamSettings.classList.toggle("open");
+});
+
+streamToggleTab.addEventListener("click", () => {
+  streamPanelVisible = !streamPanelVisible;
+  streamPanel.classList.toggle("hidden", !streamPanelVisible);
+  streamToggleTab.classList.toggle("active", streamPanelVisible);
+  sendEvent({
+    type: "stream_panel_updated",
+    visible: streamPanelVisible,
+  });
 });
 
 streamClearBtn.addEventListener("click", () => {

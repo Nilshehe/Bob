@@ -203,15 +203,24 @@ def _handle_event(window_id: str, msg: dict):
     elif mtype == "user_chat_message":
         _handle_user_chat_message(msg.get("content", ""))
     elif mtype == "stream_panel_updated":
-        # Användaren kryssade i/ur en filter- eller fönster-checkbox i
-        # kugghjuls-menyn. Persistera och synka till ev. andra öppna
-        # fönster. "windows" skickas bara med när fönster-filtret
-        # ändrades (annars None, vilket lämnar det orört).
         panel = state.update_stream_panel(
             filters=msg.get("filters"),
             windows=msg.get("windows"),
+            visible=msg.get("visible"),
         )
         manager.broadcast({"type": "stream_panel_state", **panel})
+    elif mtype == "element_text_changed":
+        element_id = msg.get("element_id")
+        el = state.get_element(element_id)
+        if el and el.get("type") == "whiteboard":
+            props = {**el.get("props", {}), "text": msg.get("text", "")}
+            state.upsert_element(element_id, props=props)
+            manager.broadcast({
+                "type": "update_element",
+                "element_id": element_id,
+                "props": props,
+                "_origin_window": window_id,
+            })
 
 
 def _handle_user_chat_message(content: str):

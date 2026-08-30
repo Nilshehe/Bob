@@ -14,6 +14,7 @@ from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 
 import gui.backend.gui_server as gui_server
+from funktioner import metrics
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -613,6 +614,7 @@ async def _execute_job(job_id: str, task: str) -> None:
                 "recursion_limit": RECURSION_LIMIT,
             },
         )
+        metrics.record_result_messages("edit_ai", result.get("messages"))
     except Exception as exc:  # t.ex. recursion_limit uppnådd
         job["status"] = "failed"
         _monitor_update(

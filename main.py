@@ -16,6 +16,7 @@ from voice.tts import speak
 import asyncio
 import threading
 from funktioner.queue import event_queue
+from funktioner import metrics
 from gui.backend.registry import ToolRegistry
 from gui.backend.main_gui import launch_gui
 import gui.backend.gui_server as gui_server
@@ -169,6 +170,23 @@ ToolRegistry.variable(
     setter=_set_voice_mode
 )
 
+def _set_talking(state: bool):
+    global TALKING
+    TALKING = bool(state)
+    return f"TALKING is now {'on' if TALKING else 'off'}"
+
+def _get_talking():
+    return TALKING
+
+ToolRegistry.variable(
+    "Talking",
+    "if Bob speaks its replies out loud (TTS) or not.",
+    readable=True,
+    writable=True,
+    getter=_get_talking,
+    setter=_set_talking
+)
+
 system_prompt = """You are BOB a helpful assistant.
 
 Always check if there are any available skills that can help you with the task.
@@ -226,6 +244,7 @@ async def ask(msg: str, agent: Any, user_id: str = "user"):
         else:
             token = token_data
         if isinstance(token, AIMessageChunk):
+            metrics.record_llm_usage("main", getattr(token, "usage_metadata", None))
             yield token, block
         elif block_type == "updates":
             if "__interrupt__" in block["data"]:
@@ -297,6 +316,7 @@ def resume_after_interrupt(agent, config, decision):
         token_data = block.get("data")
         token = token_data[0] if isinstance(token_data, tuple) else token_data
         if isinstance(token, AIMessageChunk):
+            metrics.record_llm_usage("main", getattr(token, "usage_metadata", None))
             yield token, block
         elif block["type"] == "updates":
             if "__interrupt__" in block["data"]:
@@ -311,22 +331,35 @@ async def input_loop(input_enabled):
         if VOICE_MODE:
             print("\nWaiting for wake word...")
             _broadcast_voice_state(mode=True, awake=False, listening=True, level=0.0)
-            await asyncio.to_thread(
-                wait_for_wake_word,
-                level_callback=lambda lvl: _broadcast_voice_state(
-                    mode=True, awake=False, listening=True, level=lvl
-                ),
-            )
+            try:
+                await asyncio.to_thread(
+                    wait_for_wake_word,
+                    level_callback=lambda lvl: _broadcast_voice_state(
+                        mode=True, awake=False, listening=True, level=lvl
+                    ),
+                )
+            except Exception as exc:
+                print(f"\033[31mWake word-lyssningen kraschade: {exc}\033[0m")
+                _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
+                await asyncio.sleep(1.0)
+                continue
             print("Wake word detected.")
             _broadcast_voice_state(mode=True, awake=True, listening=False, level=0.0)
-            user_input = await asyncio.to_thread(
-                stt_main,
-                level_callback=lambda lvl: _broadcast_voice_state(
-                    mode=True, awake=True, listening=True, level=lvl
-                ),
-            )
+            try:
+                user_input = await asyncio.to_thread(
+                    stt_main,
+                    level_callback=lambda lvl: _broadcast_voice_state(
+                        mode=True, awake=True, listening=True, level=lvl
+                    ),
+                )
+            except Exception as exc:
+                print(f"\033[31mRöstinspelningen kraschade: {exc}\033[0m")
+                _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
+                continue
             print(f"User input: {user_input}")
             _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
+            if not user_input:
+                continue
         else:
             user_input = await asyncio.to_thread(input, "\nask me anything: ")
         input_enabled.clear()
@@ -420,6 +453,8 @@ async def app():
     # Låt GUI-servern (som körs i sin egen tråd/loop) veta vilken loop
     # den ska skicka trådsäkra chattmeddelanden till.
     gui_server.register_bridge_loop(event_loop_instance)
+
+    metrics.start_ticker()
 
     input_enabled = asyncio.Event()
     input_enabled.set()

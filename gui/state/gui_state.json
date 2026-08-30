@@ -50,8 +50,8 @@
     "bob_text": {
       "type": "text",
       "window_id": "main",
-      "x": 1177,
-      "y": 165,
+      "x": 1296,
+      "y": 74,
       "w": 364,
       "h": 153,
       "label": "Bob",
@@ -61,8 +61,8 @@
     "code_ai_monitor": {
       "type": "agent_monitor",
       "window_id": "38c29d3b",
-      "x": 2115,
-      "y": 35,
+      "x": 2153,
+      "y": 6,
       "w": 400,
       "h": 200,
       "label": "Code AI Monitor",
@@ -80,10 +80,10 @@
   },
   "stream_panel": {
     "visible": true,
-    "x": 1000,
+    "x": 700,
     "y": 0,
     "w": 300,
-    "h": 500,
+    "h": 100,
     "filters": {
       "text": true,
       "reasoning": true,

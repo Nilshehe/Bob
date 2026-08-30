@@ -12,6 +12,7 @@ from langchain.agents import create_agent
 
 CODE_MODEL = os.environ.get("CODE_AI_MODEL", "qwen3:4b")
 import gui.backend.gui_server as gui_server
+from funktioner import metrics
 EXEC_TIMEOUT = 20          # sekunder per körning av run_python
 SHELL_EXEC_TIMEOUT = int(os.environ.get("CODE_AI_SHELL_TIMEOUT", "30"))  # sekunder per run_shell
 RECURSION_LIMIT = 15       # max antal agent-steg innan vi ger upp
@@ -308,6 +309,7 @@ async def _execute_job(job_id: str, task: str) -> None:
                 "recursion_limit": RECURSION_LIMIT,
             },
         )
+        metrics.record_result_messages("code_ai", result.get("messages"))
     except Exception as exc:  # e.g. recursion_limit reached
         job = _jobs[job_id]
         job["status"] = "failed"

@@ -25,6 +25,12 @@
     <div id="voice-circle-label">lyssnar...</div>
   </div>
 
+  <!-- Alltid synlig flik för att döma/visa live-svarswidgeten. Ligger
+       UTANFÖR #stream-panel med flit: när panelen är gömd (visible=false)
+       får man annars ingen väg tillbaka in, eftersom kugghjulet också
+       gömdes med resten av panelen. -->
+  <button id="stream-toggle-tab" title="Visa/göm live-panel">◈ live</button>
+
   <!-- Live-svarswidget: visar textström, resonemang, tool calls, interrupts. -->
   <div id="stream-panel">
     <div id="stream-header">

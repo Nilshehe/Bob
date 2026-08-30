@@ -26,7 +26,7 @@ filen.
 
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from typing_extensions import Literal
 from urllib.parse import urlparse
 
@@ -1060,3 +1060,220 @@ def get_stream_panel_state() -> dict:
     position, storlek, vilka innehållstyper som visas och vilka fönster
     den visas i just nu."""
     return state.get_stream_panel()
+
+
+# ---------------------------------------------------------------------
+# Diagram / graf / stor text / whiteboard
+# ---------------------------------------------------------------------
+# Dessa widgets uppdaterar sig själva live: grafen lyssnar på
+# "metrics_tick"-broadcasten från funktioner/metrics.py (var 5:e sekund),
+# stortexten kan antingen visa ett statiskt värde Bob sätter via
+# update_element, eller vara bunden till en registrerad ToolRegistry-
+# variabel (t.ex. "Token Usage: main") som pollas i frontend.
+# Whiteboarden är tvåvägs: både Bob (via update_element/set_whiteboard_text)
+# och användaren (skriver direkt i fönstret) kan ändra den.
+
+@tool(parse_docstring=True)
+def create_graph(
+    window_id: str,
+    series: List[str],
+    x: int = 40,
+    y: int = 40,
+    w: int = 420,
+    h: int = 240,
+    label: Optional[str] = None,
+    interval_seconds: int = 300,
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en live-graf som ritar en eller flera namngivna tidsserier
+    över tid (t.ex. "tokens:main", "tokens:code_ai" - alla kända serier
+    kan listas med list_metric_series). Grafen uppdateras automatiskt var
+    5:e sekund. Användaren kan själv välja tidsintervall i widgeten
+    (senaste minuten/5 min/15 min/1 h/allt); interval_seconds sätter bara
+    startvärdet.
+
+    Args:
+        window_id: Vilket fönster grafen ska skapas i.
+        series: Lista med serienamn att rita, t.ex. ["tokens:main"].
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett ovanför grafen.
+        interval_seconds: Starttidsintervall i sekunder (t.ex. 300 = 5 min).
+        element_id: Valfritt eget id, annars genereras ett.
+    """
+    element_id = element_id or f"graph_{uuid.uuid4().hex[:6]}"
+
+    history = {s: get_metric_history.func(s) for s in series}
+
+    state.upsert_element(
+        element_id,
+        type="graph",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label or ("Graf: " + ", ".join(series)),
+        visible=True,
+        props={
+            "series": series,
+            "interval_s": interval_seconds,
+            "history": history,
+        },
+    )
+
+    _send_create_element(window_id, element_id)
+
+    return {"element_id": element_id, "series": series}
+
+
+@tool(parse_docstring=True)
+def list_metric_series() -> list:
+    """Lista alla kända mätvärdesserier som kan ritas med create_graph
+    (t.ex. "tokens:main", "tokens:code_ai")."""
+    from funktioner import metrics
+    return metrics.list_series()
+
+
+@tool(parse_docstring=True)
+def get_metric_history(series: str, since_seconds_ago: Optional[int] = None) -> list:
+    """Läs historiken för en mätvärdesserie som punkter [{t, v}, ...].
+
+    Args:
+        series: Serienamn, t.ex. "tokens:main".
+        since_seconds_ago: Om satt, returnera bara punkter nyare än så
+            här många sekunder tillbaka. Annars hela historiken.
+    """
+    from funktioner import metrics
+    import time
+    since = time.time() - since_seconds_ago if since_seconds_ago else None
+    return metrics.get_series(series, since=since)
+
+
+@tool(parse_docstring=True)
+def create_big_text(
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 260,
+    h: int = 140,
+    label: Optional[str] = None,
+    text: str = "",
+    variable_name: Optional[str] = None,
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en stor text-visare (stor, centrerad text) - bra för ett
+    enda viktigt värde, t.ex. en tokenräknare eller status. Kan antingen
+    visa statisk text (uppdatera med update_element) eller vara bunden
+    till en registrerad variabel (se list_variables) som då pollas och
+    uppdateras automatiskt i frontend var 5:e sekund.
+
+    Args:
+        window_id: Vilket fönster visaren ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett ovanför texten.
+        text: Statiskt starttextvärde (ignoreras om variable_name anges).
+        variable_name: Namn på en registrerad variabel att visa live,
+            t.ex. "Token Usage: main". Måste vara läsbar.
+        element_id: Valfritt eget id, annars genereras ett.
+    """
+    if variable_name is not None:
+        # Kastar ValueError om variabeln inte finns/inte är läsbar - Bob
+        # ska se felet direkt istället för en visare som aldrig uppdateras.
+        text = str(ToolRegistry.get_variable(variable_name))
+
+    element_id = element_id or f"bigtext_{uuid.uuid4().hex[:6]}"
+
+    state.upsert_element(
+        element_id,
+        type="big_text",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label or variable_name or "",
+        visible=True,
+        props={
+            "text": text,
+            "variable": variable_name,
+        },
+    )
+
+    _send_create_element(window_id, element_id)
+
+    return {"element_id": element_id, "text": text}
+
+
+@tool(parse_docstring=True)
+def create_whiteboard(
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 320,
+    h: int = 220,
+    label: Optional[str] = None,
+    text: str = "",
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en whiteboard: en fri textyta som både Bob (via
+    update_element/set_whiteboard_text) och användaren (skriver direkt i
+    fönstret) kan skriva i. Bra för anteckningar, planer eller
+    scratchpad-resonemang som ska synas i GUI:t.
+
+    Args:
+        window_id: Vilket fönster whiteboarden ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett ovanför whiteboarden.
+        text: Starttext.
+        element_id: Valfritt eget id, annars genereras ett.
+    """
+    element_id = element_id or f"whiteboard_{uuid.uuid4().hex[:6]}"
+
+    state.upsert_element(
+        element_id,
+        type="whiteboard",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label or "Whiteboard",
+        visible=True,
+        props={"text": text},
+    )
+
+    _send_create_element(window_id, element_id)
+
+    return {"element_id": element_id}
+
+
+@tool(parse_docstring=True)
+def set_whiteboard_text(element_id: str, text: str) -> dict:
+    """Skriv över texten i en whiteboard.
+
+    Args:
+        element_id: ID för whiteboard-elementet.
+        text: Ny text.
+    """
+    el = state.get_element(element_id)
+    if not el or el.get("type") != "whiteboard":
+        raise ValueError(f"Okänd whiteboard: {element_id}")
+
+    props = {**el.get("props", {}), "text": text}
+    state.upsert_element(element_id, props=props)
+
+    gui_server.manager.send(
+        el["window_id"],
+        {"type": "update_element", "element_id": element_id, "props": props},
+    )
+
+    return {"ok": True}

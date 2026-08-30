@@ -15,6 +15,7 @@ from langchain.agents import create_agent
 from tools.ddgs_tool import web_search as _web_search_impl
 from tools.code_ai import code_ai, code_ai_status
 import gui.backend.gui_server as gui_server
+from funktioner import metrics
 
 FETCH_TIMEOUT = 15          # sekunder per web_fetch-anrop
 FETCH_MAX_CHARS = 15_000    # skydd mot att en enda sida svämmar över kontexten
@@ -410,6 +411,7 @@ async def _execute_job(job_id: str, task: str) -> None:
                 "recursion_limit": RECURSION_LIMIT,
             },
         )
+        metrics.record_result_messages("research_ai", result.get("messages"))
 
     except Exception as exc:
         job["status"] = "failed"
