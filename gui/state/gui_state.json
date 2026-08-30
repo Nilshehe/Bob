@@ -12,6 +12,14 @@
       "w": 800,
       "h": 600,
       "screen": 0
+    },
+    "3f83e719": {
+      "title": "Second Window",
+      "x": 60,
+      "y": 60,
+      "w": 300,
+      "h": 200,
+      "screen": 0
     }
   },
   "elements": {
@@ -38,30 +46,19 @@
       "window_id": "main",
       "x": 13,
       "y": 9,
-      "w": 155,
-      "h": 67,
+      "w": 179,
+      "h": 96,
       "label": "Voice Mode",
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": true
+        "value": false
       }
-    },
-    "bob_text": {
-      "type": "text",
-      "window_id": "main",
-      "x": 1296,
-      "y": 74,
-      "w": 364,
-      "h": 153,
-      "label": "Bob",
-      "visible": true,
-      "props": {}
     },
     "code_ai_monitor": {
       "type": "agent_monitor",
       "window_id": "38c29d3b",
-      "x": 2153,
+      "x": 2140,
       "y": 6,
       "w": 400,
       "h": 200,
@@ -77,41 +74,13 @@
         "step": 0
       }
     },
-    "bigtext_011af0": {
-      "type": "big_text",
-      "window_id": "main",
-      "x": 1372,
-      "y": 463,
-      "w": 260,
-      "h": 140,
-      "label": "Token Usage: main",
-      "visible": true,
-      "props": {
-        "text": "11686",
-        "variable": "Token Usage: main"
-      }
-    },
-    "bigtext_ac086d": {
-      "type": "big_text",
-      "window_id": "main",
-      "x": 1375,
-      "y": 304,
-      "w": 260,
-      "h": 140,
-      "label": "Token Usage: code_ai",
-      "visible": true,
-      "props": {
-        "text": "0",
-        "variable": "Token Usage: code_ai"
-      }
-    },
     "graph_85e4e7": {
       "type": "graph",
       "window_id": "main",
-      "x": 180,
-      "y": 313,
-      "w": 420,
-      "h": 240,
+      "x": 193,
+      "y": 8,
+      "w": 288,
+      "h": 183,
       "label": "Graf: tokens:main, tokens:code_ai",
       "visible": true,
       "props": {
@@ -872,25 +841,82 @@
         }
       }
     },
-    "bigtext_5aedd5": {
-      "type": "big_text",
+    "toggle_259d11": {
+      "type": "toggle",
       "window_id": "main",
-      "x": 295,
-      "y": 6,
-      "w": 260,
-      "h": 140,
-      "label": "",
+      "x": 14,
+      "y": 107,
+      "w": 177,
+      "h": 89,
+      "label": "Talking",
       "visible": true,
       "props": {
-        "text": "150 primes generated (first 10: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29)",
-        "variable": null
+        "variable": "Talking",
+        "value": false
+      }
+    },
+    "agent_monitor_1fa77d": {
+      "type": "agent_monitor",
+      "window_id": "38c29d3b",
+      "x": 37,
+      "y": 28,
+      "w": 472,
+      "h": 348,
+      "label": "Edit AI Monitor",
+      "visible": true,
+      "props": {
+        "agent": "edit_ai",
+        "status": "IDLE",
+        "activity": "Waiting...",
+        "progress": 0,
+        "tool": "",
+        "job_id": "",
+        "step": 0
+      }
+    },
+    "agent_monitor_ac3bba": {
+      "type": "agent_monitor",
+      "window_id": "38c29d3b",
+      "x": 549,
+      "y": 40,
+      "w": 200,
+      "h": 100,
+      "label": "Code AI Monitor",
+      "visible": true,
+      "props": {
+        "agent": "code_ai",
+        "status": "IDLE",
+        "activity": "Waiting...",
+        "progress": 0,
+        "tool": "",
+        "job_id": "",
+        "step": 0
+      }
+    },
+    "agent_monitor_3354a3": {
+      "type": "agent_monitor",
+      "window_id": "38c29d3b",
+      "x": 772,
+      "y": 36,
+      "w": 373,
+      "h": 262,
+      "label": "Research AI Monitor",
+      "visible": true,
+      "props": {
+        "agent": "research_ai",
+        "status": "IDLE",
+        "activity": "Waiting...",
+        "progress": 0,
+        "tool": "",
+        "job_id": "",
+        "step": 0
       }
     }
   },
   "stream_panel": {
     "visible": true,
-    "x": 689,
-    "y": 29,
+    "x": 1424,
+    "y": 49,
     "w": 381,
     "h": 496,
     "filters": {

@@ -6,6 +6,7 @@ import numpy as np
 import sounddevice as sd
 import webrtcvad
 from faster_whisper import WhisperModel
+from voice.state import broadcast_voice_state
 
 
 # ---------------- KONFIG ----------------
@@ -66,6 +67,15 @@ def record_utterance(level_callback=None) -> bytes:
     while True:
         frame = audio_q.get()
         speech = is_speech(frame)
+        level = _frame_level(frame)
+
+        broadcast_voice_state(
+            mode=True,
+            state="awake_listening",
+            awake=True,
+            listening=True,
+            level=level,
+        )
 
         if level_callback is not None:
             try:
@@ -87,7 +97,13 @@ def record_utterance(level_callback=None) -> bytes:
             elapsed = time.time() - start_time
             if silence_frames > silence_limit or elapsed > MAX_UTTERANCE_S:
                 break
-
+            broadcast_voice_state(
+            mode=True,
+            state="transcribing",
+            awake=True,
+            listening=False,
+            level=0.0,
+)
     return b"".join(voiced_frames)
 
 
@@ -117,6 +133,13 @@ def stt_main(level_callback=None):
         cmd_pcm = record_utterance(level_callback=level_callback)
 
     cmd_text = transcribe(cmd_pcm, WHISPER)
+    broadcast_voice_state(
+    mode=True,
+    state="idle",
+    awake=False,
+    listening=False,
+    level=0.0,
+)
     return cmd_text
         
 

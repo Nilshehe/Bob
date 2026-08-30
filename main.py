@@ -23,6 +23,7 @@ from gui.backend.registry import ToolRegistry
 from gui.backend.main_gui import launch_gui
 import gui.backend.gui_server as gui_server
 from langchain_core.tools import tool
+from voice.state import register_state_callback
 
 event_loop_instance = None
 
@@ -86,6 +87,12 @@ def _broadcast_voice_state(**fields):
         gui_server.manager.broadcast({"type": "voice_state", **fields})
     except Exception:
         pass
+    
+def _voice_state_to_gui(**fields):
+    _broadcast_voice_state(**fields)
+
+
+register_state_callback(_voice_state_to_gui)
 
 
 def _broadcast_agent_stream(node_type, content):
@@ -403,20 +410,10 @@ async def input_loop(input_enabled):
 
         if VOICE_MODE:
             print("\nWaiting for wake word...")
-            _broadcast_voice_state(mode=True, awake=False, listening=True, level=0.0)
-            try:
-                wake_detected = await asyncio.to_thread(
-                    wait_for_wake_word,
-                    level_callback=lambda lvl: _broadcast_voice_state(
-                        mode=True, awake=False, listening=True, level=lvl
-                    ),
-                    stop_event=_voice_mode_changed,
-                )
-            except Exception as exc:
-                print(f"\033[31mWake word-lyssningen kraschade: {exc}\033[0m")
-                _broadcast_voice_state(mode=True, awake=False, listening=False, level=0.0)
-                await asyncio.sleep(1.0)
-                continue
+            wake_detected = await asyncio.to_thread(
+                wait_for_wake_word,
+                stop_event=_voice_mode_changed,
+            )
             if not wake_detected:
                 # Voice Mode stängdes av (eller slogs om) medan vi
                 # lyssnade efter wake word - loopa om direkt istället för

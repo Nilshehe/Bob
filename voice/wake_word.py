@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 import numpy as np
 import sounddevice as sd
+from voice.state import broadcast_voice_state
 
 # ---------------- KONFIG ----------------
 WAKE_WORD_LABEL = "BOB"
@@ -173,6 +174,13 @@ def wait_for_wake_word(templates=None, level_callback=None, stop_event=None):
     för att sitta fast tills wake word råkar höras. Returnerar True om
     wake word upptäcktes, False om lyssningen avbröts via stop_event.
     """
+    broadcast_voice_state(
+    mode=True,
+    state="listening_for_wake",
+    awake=False,
+    listening=True,
+    level=0.0,
+)
     if templates is None:
         templates = load_templates()
 
@@ -229,9 +237,16 @@ def wait_for_wake_word(templates=None, level_callback=None, stop_event=None):
             #print(f"\rLyssnar... dtw={best:.1f}  (tröskel={DTW_THRESHOLD})   ", end="", flush=True)
 
             if best < DTW_THRESHOLD:
+                broadcast_voice_state(
+                    mode=True,
+                    state="awake",
+                    awake=True,
+                    listening=False,
+                    level=0.0,
+                )
+
                 #print(f"\n>> '{WAKE_WORD_LABEL}' upptäckt! (dtw={best:.1f})")
                 return True
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in ("enroll", "listen"):

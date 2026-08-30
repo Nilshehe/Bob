@@ -1,6 +1,6 @@
 import uuid
 from typing import Any, Callable
- 
+import gui.backend.gui_server as gui_server
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
@@ -67,7 +67,21 @@ _approval_agent = create_agent(
     tools=[approve, reject],
     checkpointer=_approval_memory,
 )
- 
+
+def _broadcast_approval_stream(node_type: str, content: str) -> None:
+    """Skickar Approval AI:s output till samma GUI-feed som Main AI."""
+    if not content:
+        return
+
+    try:
+        gui_server.broadcast_agent_stream({
+            "type": "agent_stream",
+            "node_type": f"approval_{node_type}",
+            "content": content,
+        })
+    except Exception:
+        pass
+
  
 def _stream_agent_turn(cfg: dict, msg: str) -> str:
     """Send a message to the approval agent and stream the response
@@ -96,6 +110,7 @@ def _stream_agent_turn(cfg: dict, msg: str) -> str:
 
         respones, node_type = get_last_text(token, block)
         formater(respones, node_type)
+        _broadcast_approval_stream(node_type, respones)
         if node_type == "text" and respones:
             text_parts.append(respones)
             printed_anything = True
