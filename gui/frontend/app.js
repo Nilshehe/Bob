@@ -368,6 +368,7 @@ function createElementDom(
       data.props || {}
     );
   }
+  
 }
 
 
@@ -466,7 +467,190 @@ function buildBody(
         });
       }
     );
+  }
+  else if (type === "config_widget") {
+    
+    const config = props.config || {};
+    const modelSection = document.createElement("div");
+    modelSection.className = "config-section";
+    modelSection.textContent = "MODEL";
 
+    root.appendChild(modelSection);
+
+    const modelSelect = document.createElement("select");
+    modelSelect.className = "config-model-select";
+
+    const models = props.models || [];
+
+    models.forEach((model) => {
+
+      const option = document.createElement("option");
+
+      option.value = model;
+      option.textContent = model;
+
+      if (model === config.model) {
+        option.selected = true;
+      }
+
+      modelSelect.appendChild(option);
+    });
+
+    modelSelect.addEventListener("change", () => {
+
+      sendEvent({
+        type: "html_action",
+        element_id: id,
+        action: "config_model",
+        model: modelSelect.value,
+      });
+
+    });
+
+    root.appendChild(modelSelect);
+
+root.appendChild(modelSelect);
+    const root = document.createElement("div");
+    root.className = "config-widget";
+
+    const title = document.createElement("div");
+    title.className = "config-title";
+    title.textContent = "BOB CONFIGURATION";
+
+    root.appendChild(title);
+
+
+    function addSection(titleText) {
+
+      const section = document.createElement("div");
+      section.className = "config-section";
+      section.textContent = titleText;
+
+      root.appendChild(section);
+
+    }
+
+
+    function addToggle(path, label, value) {
+
+      const row = document.createElement("div");
+      row.className = "config-row";
+
+      const text = document.createElement("span");
+      text.textContent = label;
+
+      const toggle = document.createElement("div");
+
+      toggle.className =
+        "config-toggle " +
+        (value ? "on" : "off");
+
+      const knob = document.createElement("span");
+      knob.className = "config-toggle-knob";
+
+      toggle.appendChild(knob);
+
+      toggle.addEventListener("click", () => {
+
+        const newValue =
+          !toggle.classList.contains("on");
+
+        toggle.classList.toggle(
+          "on",
+          newValue
+        );
+
+        toggle.classList.toggle(
+          "off",
+          !newValue
+        );
+
+        sendEvent({
+          type: "html_action",
+          element_id: id,
+          action: "config_toggle",
+          config_path: path,
+        });
+
+      });
+
+      row.appendChild(text);
+      row.appendChild(toggle);
+
+      root.appendChild(row);
+    }
+
+
+    addSection("TOOLS");
+
+    Object.entries(
+      config.tools || {}
+    ).forEach(([name, value]) => {
+
+      addToggle(
+        `tools.${name}`,
+        name,
+        Boolean(value)
+      );
+
+    });
+
+
+    addSection("APPROVAL");
+
+    Object.entries(
+      config.interupt_tools || {}
+    ).forEach(([name, value]) => {
+
+      addToggle(
+        `interupt_tools.${name}`,
+        name,
+        Boolean(value)
+      );
+
+    });
+
+
+    addSection("FEATURES");
+
+    addToggle(
+      "TALKING",
+      "TALKING",
+      Boolean(config.TALKING)
+    );
+
+    addToggle(
+      "VOICE_MODE",
+      "VOICE_MODE",
+      Boolean(config.VOICE_MODE)
+    );
+
+
+    const restart =
+      document.createElement("button");
+
+    restart.className =
+      "config-restart";
+
+    restart.textContent =
+      "APPLY & RESTART";
+
+    restart.addEventListener(
+      "click",
+      () => {
+
+        sendEvent({
+          type: "html_action",
+          element_id: id,
+          action: "config_restart",
+        });
+
+      }
+    );
+
+    root.appendChild(restart);
+
+    body.appendChild(root);
   }
 
 

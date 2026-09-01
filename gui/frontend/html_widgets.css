@@ -236,3 +236,96 @@
   cursor: pointer;
   font-weight: 700;
 }
+.config-widget {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.config-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.config-section {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.6;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  gap: 12px;
+}
+
+.config-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-toggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: 0.15s;
+}
+
+.config-toggle.on {
+  background: #22c55e;
+}
+
+.config-toggle.off {
+  background: #555;
+}
+
+.config-toggle-knob {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 3px;
+  left: 3px;
+  border-radius: 50%;
+  background: white;
+  transition: 0.15s;
+}
+
+.config-toggle.on .config-toggle-knob {
+  left: 23px;
+}
+
+.config-restart {
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.config-model-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  margin-bottom: 8px;
+  border-radius: 7px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: inherit;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}

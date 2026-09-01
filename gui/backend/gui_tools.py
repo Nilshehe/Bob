@@ -188,9 +188,10 @@ def create_config_widget(
         h: Höjd.
         element_id: Valfritt element-id.
     """
-    from config_manager import load_config
+    from config_manager import load_config, get_ollama_models
 
     config = load_config()
+    models = get_ollama_models()
 
     element_id = (
         element_id
@@ -209,7 +210,8 @@ def create_config_widget(
         visible=True,
         props={
             "config": config,
-        },
+            "models": models,
+        }
     )
 
     _send_create_element(

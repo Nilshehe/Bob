@@ -268,21 +268,19 @@ def _handle_html_action(window_id: str, msg: dict):
     action = msg.get("action")
     value = msg.get("value")
 
-    if action == "config_toggle":
-        config_path = msg.get("config_path")
+    config_path = None
 
-    if action == "config_restart":
-        if bridge_loop is None:
-            return
+    if action == "config_model":
+        model = msg.get("model")
 
-        from funktioner.queue import event_queue
+        if model:
+            from config_manager import set_config_value
 
-        asyncio.run_coroutine_threadsafe(
-            event_queue.put({
-                "type": "restart_agent",
-            }),
-            bridge_loop,
-        )
+            set_config_value(
+                "model",
+                model,
+            )
+
         return
 
     if config_path:

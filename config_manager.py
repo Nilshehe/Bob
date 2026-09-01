@@ -2,6 +2,27 @@ import json
 from pathlib import Path
 from threading import RLock
 from typing import Any
+import requests
+
+
+def get_ollama_models():
+    try:
+        response = requests.get(
+            "http://localhost:11434/api/tags",
+            timeout=3,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        return [
+            model["name"]
+            for model in data.get("models", [])
+        ]
+
+    except Exception:
+        return []
 
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
