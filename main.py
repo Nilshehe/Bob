@@ -395,10 +395,6 @@ async def input_loop(input_enabled):
                 stop_event=_voice_mode_changed,
             )
             if not wake_detected:
-                # Voice Mode stängdes av (eller slogs om) medan vi
-                # lyssnade efter wake word - loopa om direkt istället för
-                # att sitta fast tills wake word råkar höras, så bytet
-                # till textläge slår igenom med en gång.
                 continue
             print("Wake word detected.")
             _broadcast_voice_state(mode=True, awake=True, listening=False, level=0.0)
