@@ -12,14 +12,6 @@
       "w": 800,
       "h": 600,
       "screen": 0
-    },
-    "3f83e719": {
-      "title": "Second Window",
-      "x": 60,
-      "y": 60,
-      "w": 300,
-      "h": 200,
-      "screen": 0
     }
   },
   "elements": {
@@ -877,8 +869,8 @@
     "agent_monitor_ac3bba": {
       "type": "agent_monitor",
       "window_id": "38c29d3b",
-      "x": 549,
-      "y": 40,
+      "x": 543,
+      "y": 33,
       "w": 200,
       "h": 100,
       "label": "Code AI Monitor",
@@ -896,8 +888,8 @@
     "agent_monitor_3354a3": {
       "type": "agent_monitor",
       "window_id": "38c29d3b",
-      "x": 772,
-      "y": 36,
+      "x": 780,
+      "y": 31,
       "w": 373,
       "h": 262,
       "label": "Research AI Monitor",

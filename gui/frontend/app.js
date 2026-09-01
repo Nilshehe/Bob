@@ -2239,9 +2239,14 @@ function handleAgentStream(msg) {
   const nodeType = msg.node_type;
   const content = msg.content;
 
-  // Turmarkör: skickas av backend inför varje ny AI-tur (oavsett om den
-  // triggas av chatt, röst eller en bakgrundsjobb-notis). Visas alltid,
-  // filtreras inte bort av inställningarna.
+  // Approval AI:s text är också token-streamad.
+  // Behandla den som vanlig text så att varje token inte blir en ny rad.
+  const isTextStream =
+    nodeType === "text" ||
+    nodeType === "reasoning" ||
+    nodeType === "approval_text";
+
+  // Turmarkör: skickas av backend inför varje ny AI-tur.
   if (nodeType === "turn") {
     currentStreamRun = null;
 
@@ -2257,10 +2262,10 @@ function handleAgentStream(msg) {
     return;
   }
 
-  // Text/reasoning strömmar token för token - vi vill klistra ihop dem i
-  // samma rad istället för att skapa en ny rad per token.
+  // Text/reasoning/Approval AI strömmar token för token.
+  // Klistra ihop tokens i samma rad.
   if (
-    (nodeType === "text" || nodeType === "reasoning") &&
+    isTextStream &&
     currentStreamRun &&
     currentStreamRun.dataset.nodeType === nodeType
   ) {
@@ -2274,7 +2279,7 @@ function handleAgentStream(msg) {
 
     streamBody.appendChild(line);
 
-    if (nodeType === "text" || nodeType === "reasoning") {
+    if (isTextStream) {
       currentStreamRun = line;
     } else {
       currentStreamRun = null;
