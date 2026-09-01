@@ -24,6 +24,7 @@ from gui.backend.main_gui import launch_gui
 import gui.backend.gui_server as gui_server
 from langchain_core.tools import tool
 from voice.state import register_state_callback
+from config_manager import load_config, get_enabled_tools,set_config_value
 
 event_loop_instance = None
 
@@ -67,8 +68,7 @@ register_notify_callback(_on_code_job_done)
 register_research_notify_callback(_on_research_job_done)
 register_edit_notify_callback(_on_edit_job_done)
 
-VOICE_MODE = False
-TALKING = False
+
 
 # Satt av _set_voice_mode varje gång Voice Mode växlar (oavsett om det
 # är Bob själv, toggle-knappen i GUI:t eller ett annat verktygsanrop som
@@ -121,8 +121,12 @@ def _emit(response, node_type):
 from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
 
-llm = ChatOllama(model="Qwen3:4b", reasoning=True, num_ctx=8192, num_predict=8192)
 
+app_config = load_config()
+
+#set talking and voice mode
+VOICE_MODE = bool(app_config.get("VOICE_MODE", False))
+TALKING = bool(app_config.get("TALKING", False))
 
 #get gui information tool
 from gui.backend.bob_integration import gui_system_prompt
@@ -143,39 +147,82 @@ from gui.backend.bob_integration import get_langchain_tools
 from tools.clipboard import copy_to_clipboard
 gui_tools = get_langchain_tools()
 
-tools = [
-    web_search,
-    search_visible_webpage,
-    download_file,
-    move_file,
-    get_clickable_elements,
-    click_on_page,
-    type_into_page,
-    scroll_page,
-    click_and_download,
-    get_page_text,
-    open_browser,
-    code_ai,
-    code_ai_status,
-    research_ai,
-    research_ai_status,
-    shutdown_ai,
-    edit_ai,
-    edit_ai_status,
-    apply_edit_files,
-    list_apply_backups,
-    restore_from_backup,
-    # *get_model3d_tools(),
-    # *get_model3d_complex_tools()
-    *gui_tools,
-    copy_to_clipboard
-]
+AVAILABLE_TOOLS = {
+    "copy_to_clipboard": copy_to_clipboard,
+
+    "web_search": web_search,
+
+    "search_visible_webpage": search_visible_webpage,
+    "download_file": download_file,
+    "move_file": move_file,
+    "get_clickable_elements": get_clickable_elements,
+    "click_on_page": click_on_page,
+    "type_into_page": type_into_page,
+    "scroll_page": scroll_page,
+    "click_and_download": click_and_download,
+    "get_page_text": get_page_text,
+    "open_browser": open_browser,
+
+    "code_ai": code_ai,
+    "code_ai_status": code_ai_status,
+
+    "research_ai": research_ai,
+    "research_ai_status": research_ai_status,
+
+    "shutdown_ai": shutdown_ai,
+
+    "edit_ai": edit_ai,
+    "edit_ai_status": edit_ai_status,
+    "apply_edit_files": apply_edit_files,
+    "list_apply_backups": list_apply_backups,
+    "restore_from_backup": restore_from_backup,
+}
+tools = get_enabled_tools()
+
+def get_enabled_tools():
+    config = load_config()
+
+    enabled = []
+
+    for name, tool_instance in AVAILABLE_TOOLS.items():
+        if config.get("tools", {}).get(name, False):
+            enabled.append(tool_instance)
+
+    enabled.extend(gui_tools)
+
+    return enabled
+
+def get_interrupt_config():
+    config = load_config()
+
+    return {
+        name: bool(enabled)
+        for name, enabled in config.get(
+            "interupt_tools",
+            {}
+        ).items()
+    }
+
 #gui variabler
 def _set_voice_mode(state: bool):
     global VOICE_MODE
+
     VOICE_MODE = bool(state)
+
+    set_config_value(
+        "VOICE_MODE",
+        VOICE_MODE,
+    )
+
     _voice_mode_changed.set()
-    _broadcast_voice_state(mode=VOICE_MODE, awake=False, listening=False, level=0.0)
+
+    _broadcast_voice_state(
+        mode=VOICE_MODE,
+        awake=False,
+        listening=False,
+        level=0.0,
+    )
+
     return f"VOICE MODE is now {'on' if VOICE_MODE else 'off'}"
 
 def _get_voice_mode():
@@ -192,7 +239,14 @@ ToolRegistry.variable(
 
 def _set_talking(state: bool):
     global TALKING
+
     TALKING = bool(state)
+
+    set_config_value(
+        "TALKING",
+        TALKING,
+    )
+
     return f"TALKING is now {'on' if TALKING else 'off'}"
 
 def _get_talking():
@@ -207,45 +261,53 @@ ToolRegistry.variable(
     setter=_set_talking
 )
 
-system_prompt = """You are BOB a helpful assistant.
-
-Always check if there are any available skills that can help you with the task.
-If there are, use them. If not, try to solve the task yourself.
-
-Always answer in Swedish.
-
-You may receive relevant long-term memories about the user.
-Use them when they are relevant to the current request.
-Do not mention the memory system unless the user asks about it.
-Do not assume a memory is correct if the current user message contradicts it.
-Allways check memory for relevant information before using tools or answering questions.
-"""
+system_prompt = app_config.get(
+    "system_prompt"
+)
 
 config = {"configurable": {"thread_id": "some_id"}}
 
 def make_agent() -> Any:
-    agent = create_agent(
-        model=llm,
-        middleware=[
-            HumanInTheLoopMiddleware(interrupt_on={
-                "web_search": False,
-                "download_file": True,
-                "move_file": True,
-                "click_and_download": True,
-                "code_ai": True,
-                "research_ai": True,
-                "download_material": True,
-                "download_reference_shape": True,
-                "apply_edit_files": True,
-            })
-        ],
-        system_prompt=system_prompt,
-        tools=tools,
-        checkpointer=memory_saver
+    config = load_config()
+
+    model = ChatOllama(
+        model=config["model"],
+        temperature=config.get("temperature", 0.7),
+        reasoning=True,
+        num_ctx=config.get("num_ctx", 8192),
+        num_predict=config.get("num_predict", 8192),
     )
+
+    enabled_tools = get_enabled_tools()
+
+    agent = create_agent(
+        model=model,
+        middleware=[
+            HumanInTheLoopMiddleware(
+                interrupt_on=get_interrupt_config()
+            )
+        ],
+        system_prompt=config.get(
+            "system_prompt",
+            "You are a helpful assistant."
+        ),
+        tools=enabled_tools,
+        checkpointer=memory_saver,
+    )
+
     return agent
 
 agent = make_agent()
+
+def reload_agent():
+    global agent
+
+    agent = make_agent()
+
+    return {
+        "ok": True,
+        "message": "Agent reloaded from config.json.",
+    }
 
 async def ask(msg: str, agent: Any, user_id: str = "user"):
     async for block in agent.astream(
@@ -432,6 +494,14 @@ async def input_loop(input_enabled):
 async def event_loop(input_enabled):
     while True:
         event = await event_queue.get()
+        if event["type"] == "restart_agent":
+            reload_agent()
+
+            gui_server.manager.broadcast({
+                "type": "agent_reloaded"
+            })
+
+            continue
         if event["type"] == "user_message":
             WORDS = []
             _broadcast_agent_stream("turn", "\u2022")

@@ -161,3 +161,97 @@ def _browser(props):
         f'</div>',
         640, 420,
     )
+
+@component("config_widget")
+def _config_widget(props):
+    config = props.get("config", {})
+
+    tools = config.get("tools", {})
+    interrupt_tools = config.get("interupt_tools", {})
+
+    rows = []
+
+    rows.append(
+        '<div class="config-title">BOB CONFIGURATION</div>'
+    )
+
+    rows.append(
+        '<div class="config-section">TOOLS</div>'
+    )
+
+    for name, value in tools.items():
+        rows.append(
+            f'''
+            <div class="config-row">
+                <span>{_esc(name)}</span>
+                <div
+                    class="config-toggle {'on' if value else 'off'}"
+                    data-bob-config="tools.{_esc(name)}"
+                    data-bob-action="config_toggle"
+                >
+                    <span class="config-toggle-knob"></span>
+                </div>
+            </div>
+            '''
+        )
+
+    rows.append(
+        '<div class="config-section">APPROVAL</div>'
+    )
+
+    for name, value in interrupt_tools.items():
+        rows.append(
+            f'''
+            <div class="config-row">
+                <span>{_esc(name)}</span>
+                <div
+                    class="config-toggle {'on' if value else 'off'}"
+                    data-bob-config="interupt_tools.{_esc(name)}"
+                    data-bob-action="config_toggle"
+                >
+                    <span class="config-toggle-knob"></span>
+                </div>
+            </div>
+            '''
+        )
+
+    rows.append(
+        '<div class="config-section">FEATURES</div>'
+    )
+
+    for name in ("TALKING", "VOICE_MODE"):
+        value = bool(config.get(name, False))
+
+        rows.append(
+            f'''
+            <div class="config-row">
+                <span>{_esc(name)}</span>
+                <div
+                    class="config-toggle {'on' if value else 'off'}"
+                    data-bob-config="{_esc(name)}"
+                    data-bob-action="config_toggle"
+                >
+                    <span class="config-toggle-knob"></span>
+                </div>
+            </div>
+            '''
+        )
+
+    rows.append(
+        '''
+        <button
+            class="config-restart"
+            data-bob-action="config_restart"
+        >
+            APPLY &amp; RESTART
+        </button>
+        '''
+    )
+
+    html = (
+        '<div class="html-c html-c-config-widget">'
+        + "".join(rows)
+        + "</div>"
+    )
+
+    return html, 420, max(500, 60 + len(rows) * 42)

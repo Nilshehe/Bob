@@ -165,6 +165,64 @@ def _normalize_model_path(model_path):
 # GUI-element
 # ---------------------------------------------------------------------
 
+
+@tool(parse_docstring=True)
+def create_config_widget(
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 420,
+    h: int = 700,
+    element_id: Optional[str] = None,
+) -> dict:
+    """Skapa en widget med Bobs konfiguration.
+
+    Widgeten visar alla boolean-inställningar från config.json som
+    toggles och har en Apply & Restart-knapp.
+
+    Args:
+        window_id: Fönstret där widgeten ska placeras.
+        x: X-position.
+        y: Y-position.
+        w: Bredd.
+        h: Höjd.
+        element_id: Valfritt element-id.
+    """
+    from config_manager import load_config
+
+    config = load_config()
+
+    element_id = (
+        element_id
+        or f"config_{uuid.uuid4().hex[:6]}"
+    )
+
+    state.upsert_element(
+        element_id,
+        type="config_widget",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label="Bob Configuration",
+        visible=True,
+        props={
+            "config": config,
+        },
+    )
+
+    _send_create_element(
+        window_id,
+        element_id,
+    )
+
+    return {
+        "ok": True,
+        "element_id": element_id,
+    }
+
+
 @tool(parse_docstring=True)
 def create_element(
     element_type: Literal[
@@ -817,7 +875,7 @@ def update_html(
 def create_html_component(
     component: Literal[
         "text", "panel", "status", "button", "input", "toggle", "progress",
-        "image", "video", "camera_feed", "browser",
+        "image", "video", "camera_feed", "browser","config_widget",
     ],
     window_id: str,
     x: int = 40,

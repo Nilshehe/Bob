@@ -13,6 +13,7 @@ from typing import Dict, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from config_manager import load_config
 
 from gui.backend.state_manager import state
 
@@ -267,6 +268,76 @@ def _handle_html_action(window_id: str, msg: dict):
     action = msg.get("action")
     value = msg.get("value")
 
+    if action == "config_toggle":
+        config_path = msg.get("config_path")
+
+    if action == "config_restart":
+        if bridge_loop is None:
+            return
+
+        from funktioner.queue import event_queue
+
+        asyncio.run_coroutine_threadsafe(
+            event_queue.put({
+                "type": "restart_agent",
+            }),
+            bridge_loop,
+        )
+        return
+
+    if config_path:
+        from config_manager import (
+            get_config_value,
+            set_config_value,
+        )
+
+        current = bool(
+            get_config_value(
+                config_path,
+                False,
+            )
+        )
+
+        set_config_value(
+            config_path,
+            not current,
+        )
+
+        el = state.get_element(element_id)
+
+        if el:
+            from gui.backend import html_components
+
+            props = {
+                **el.get("props", {}),
+                "config": load_config(),
+            }
+
+            rendered, _, _ = (
+                html_components.COMPONENTS[
+                    "config_widget"
+                ](props)
+            )
+
+            state.upsert_element(
+                element_id,
+                props=props,
+                html=rendered,
+            )
+
+            manager.send(
+                window_id,
+                {
+                    "type": "update_element",
+                    "element_id": element_id,
+                    "props": props,
+                    "html": rendered,
+                },
+            )
+
+        return
+
+
     el = state.get_element(element_id) if element_id else None
 
     if el and el.get("type") == "html" and el.get("component") == "toggle" and action == "toggle":
@@ -344,3 +415,5 @@ def _handle_element_clicked(window_id: str, element_id: str):
             "props": props,
         },
     )
+
+

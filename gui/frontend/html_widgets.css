@@ -159,3 +159,80 @@
   padding: 8px;
   font-size: 12px;
 }
+
+.html-c-config-widget {
+  padding: 18px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.config-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.config-section {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.6;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+}
+
+.config-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-toggle {
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.config-toggle.on {
+  background: #22c55e;
+}
+
+.config-toggle.off {
+  background: #555;
+}
+
+.config-toggle-knob {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: 0.15s ease;
+}
+
+.config-toggle.on .config-toggle-knob {
+  left: 23px;
+}
+
+.config-restart {
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
