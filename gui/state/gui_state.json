@@ -52,7 +52,7 @@
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": false
+        "value": true
       }
     },
     "code_ai_monitor": {
@@ -77,8 +77,8 @@
     "graph_85e4e7": {
       "type": "graph",
       "window_id": "main",
-      "x": 193,
-      "y": 8,
+      "x": 208,
+      "y": 12,
       "w": 288,
       "h": 183,
       "label": "Graf: tokens:main, tokens:code_ai",
@@ -915,8 +915,8 @@
   },
   "stream_panel": {
     "visible": true,
-    "x": 1424,
-    "y": 49,
+    "x": 1506,
+    "y": 34,
     "w": 381,
     "h": 496,
     "filters": {

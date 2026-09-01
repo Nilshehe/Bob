@@ -36,6 +36,7 @@ from gui.backend.registry import ToolRegistry, variable
 from gui.backend.state_manager import state
 import gui.backend.gui_server as gui_server
 import gui.backend.window_manager as wm
+from gui.backend import html_sanitizer, html_components, theme
 
 
 # ---------------------------------------------------------------------
@@ -681,6 +682,262 @@ def update_element(
     return {
         "ok": True
     }
+
+
+# ---------------------------------------------------------------------
+# HTML-element (generellt GUI-format, GUI-specen punkt 1-10, 55-60)
+# ---------------------------------------------------------------------
+# HTML är en elementtyp precis som text/button/panel osv - samma state
+# (state_manager.py), samma WebSocket-events (create_element/
+# update_element/remove_element/element_moved/element_resized) och samma
+# persistence. remove_element/show_element/move_element/update_element
+# ovan fungerar redan på html-element utan ändringar eftersom de bara
+# jobbar mot element_id, inte elementtyp.
+
+@tool(parse_docstring=True)
+def create_html(
+    window_id: str,
+    html: str,
+    x: int = 40,
+    y: int = 40,
+    w: int = 320,
+    h: int = 200,
+    label: str = "",
+    element_id: Optional[str] = None,
+    raw: bool = False,
+) -> dict:
+    """Skapa ett eget HTML-GUI-element. Du får kombinera div/span/h1-h6/p/
+    button/input/textarea/select/table/img/video/canvas m.fl. säkra
+    HTML-taggar, plus egen CSS i style="". <script>, <iframe>, <object>,
+    <embed> och alla onclick-liknande attribut tas bort automatiskt -
+    interaktion (t.ex. knappar) går via data-bob-action="namn" (och
+    valfritt data-bob-value="..."), som skickas tillbaka till dig som ett
+    html_action-event. Neutrala färger (t.ex. background:white;
+    color:black) tonas automatiskt i Bobs tema (gråskala + temafärg) om
+    du inte sätter raw=True - använd raw=True för foton eller annat där
+    originalfärgerna är viktiga.
+
+    Args:
+        window_id: Vilket fönster elementet ska skapas i.
+        html: HTML-innehållet. Saneras automatiskt innan det visas.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar.
+        h: Höjd i pixlar.
+        label: Etikett i widgetens header.
+        element_id: Valfritt eget id, annars genereras ett.
+        raw: True = visa i originalfärger, ingen automatisk temafärgning.
+    """
+    element_id = (
+        element_id
+        or f"html_{uuid.uuid4().hex[:6]}"
+    )
+
+    state.upsert_element(
+        element_id,
+        type="html",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        label=label,
+        visible=True,
+        html=html_sanitizer.sanitize_html(html),
+        component=None,
+        props={"raw": raw},
+    )
+
+    _send_create_element(
+        window_id,
+        element_id,
+    )
+
+    return {
+        "element_id": element_id
+    }
+
+
+@tool(parse_docstring=True)
+def update_html(
+    element_id: str,
+    html: Optional[str] = None,
+    component: Optional[str] = None,
+    props: Optional[dict] = None,
+    label: Optional[str] = None,
+) -> dict:
+    """Uppdatera ett HTML-element: byt HTML-innehåll, byt till en färdig
+    komponentmall, mergea in nya props, eller byt etikett - utan att
+    ändra position eller storlek (använd update_element för det, det
+    fungerar på html-element precis som på alla andra elementtyper).
+
+    Args:
+        element_id: ID för HTML-elementet som ska uppdateras.
+        html: Ny fri HTML (saneras automatiskt). Ignoreras om component anges.
+        component: Byt till en färdig komponentmall, se create_html_component.
+        props: Fria props som mergas in i elementets nuvarande props.
+        label: Ny etikett.
+    """
+    el = state.get_element(element_id)
+
+    if not el or el.get("type") != "html":
+        raise ValueError(f"Okänt HTML-element: {element_id}")
+
+    merged_props = {**el.get("props", {}), **(props or {})}
+    fields = {"props": merged_props}
+
+    if label is not None:
+        fields["label"] = label
+
+    if component is not None:
+        if component not in html_components.COMPONENTS:
+            raise ValueError(f"Okänd komponent: {component}")
+        rendered, _w, _h = html_components.COMPONENTS[component](merged_props)
+        fields["component"] = component
+        fields["html"] = rendered
+    elif html is not None:
+        fields["component"] = None
+        fields["html"] = html_sanitizer.sanitize_html(html)
+
+    state.upsert_element(element_id, **fields)
+
+    gui_server.manager.send(
+        el["window_id"],
+        {
+            "type": "update_element",
+            "element_id": element_id,
+            **fields,
+        },
+    )
+
+    return {"ok": True}
+
+
+@tool(parse_docstring=True)
+def create_html_component(
+    component: Literal[
+        "text", "panel", "status", "button", "input", "toggle", "progress",
+        "image", "video", "camera_feed", "browser",
+    ],
+    window_id: str,
+    x: int = 40,
+    y: int = 40,
+    w: Optional[int] = None,
+    h: Optional[int] = None,
+    label: Optional[str] = None,
+    element_id: Optional[str] = None,
+    props: Optional[dict] = None,
+) -> dict:
+    """Skapa ett HTML-element från en färdig mall istället för att skriva
+    all HTML själv. Stödda mallar: text, panel, status, button, input,
+    toggle, progress, image, video, camera_feed, browser.
+
+    toggle kräver props={"variable": "..."} (namn på en registrerad
+    variabel, se list_variables) - nuvarande värde läses in automatiskt.
+    image/video tar props={"src": "..."}; sätt props={"raw": true} för
+    att visa originalfärger istället för Bobs temafärg (se create_html).
+    camera_feed tar antingen props={"source": "local"} (användarens egen
+    kamera via webbläsarens getUserMedia) eller props={"source": "x",
+    "url": "..."} för en extern kamera/MJPEG-ström.
+    browser tar props={"url": "...", "show_address_bar": true/false}.
+
+    Args:
+        component: Vilken färdig mall som ska användas.
+        window_id: Vilket fönster elementet ska skapas i.
+        x: X-position i pixlar.
+        y: Y-position i pixlar.
+        w: Bredd i pixlar, annars mallens standardbredd.
+        h: Höjd i pixlar, annars mallens standardhöjd.
+        label: Etikett i widgetens header, annars komponentnamnet.
+        element_id: Valfritt eget id, annars genereras ett.
+        props: Props mallen tar, se beskrivningen ovan per komponent.
+    """
+    if component not in html_components.COMPONENTS:
+        raise ValueError(f"Okänd komponent: {component}")
+
+    props = dict(props or {})
+
+    # toggle: läs in variabelns nuvarande värde automatiskt (punkt 11/41)
+    if component == "toggle" and "variable" in props and "value" not in props:
+        props["value"] = bool(ToolRegistry.get_variable(props["variable"]))
+
+    rendered, default_w, default_h = html_components.COMPONENTS[component](props)
+
+    element_id = (
+        element_id
+        or f"{component}_{uuid.uuid4().hex[:6]}"
+    )
+
+    state.upsert_element(
+        element_id,
+        type="html",
+        window_id=window_id,
+        x=x,
+        y=y,
+        w=w or default_w,
+        h=h or default_h,
+        label=label or component,
+        visible=True,
+        html=rendered,
+        component=component,
+        props=props,
+    )
+
+    _send_create_element(
+        window_id,
+        element_id,
+    )
+
+    return {"element_id": element_id}
+
+
+@tool(parse_docstring=True)
+def capture_camera_frame(element_id: str) -> dict:
+    """(Inte färdigkopplad än) Ska ta en enstaka bild-snapshot från en
+    camera_feed-widgets ström och skicka den till dig. Kräver en
+    async request/svar-runda över WebSocket (ett nytt
+    "capture_camera_frame"/"camera_frame_captured"-meddelandepar i
+    gui_server.py + app.js) som inte ingår i den här patchen ännu.
+
+    Args:
+        element_id: ID för camera_feed-elementet.
+    """
+    raise NotImplementedError(
+        "capture_camera_frame är inte kopplat till frontend än - se "
+        "docstringen för vad som behöver byggas."
+    )
+
+
+# ---------------------------------------------------------------------
+# Theme (GUI-specen punkt 24-30, 59-60)
+# ---------------------------------------------------------------------
+
+@tool(parse_docstring=True)
+def set_theme_color(accent: str) -> dict:
+    """Byt Bobs huvudtemafärg (accent). Övriga temafärger (bakgrund, yta,
+    text, muted) räknas om automatiskt utifrån den. Alla HTML-widgetar
+    (inklusive gråskale-tonad media) och de befintliga widget-typerna
+    uppdateras direkt i alla öppna fönster utan att skapas om.
+
+    Args:
+        accent: Hex-färg, t.ex. "#00eaff" eller "#ff6600".
+    """
+    new_theme = theme.set_accent(accent)
+
+    gui_server.manager.broadcast({
+        "type": "theme_state",
+        **new_theme,
+    })
+
+    return new_theme
+
+
+@tool(parse_docstring=True)
+def get_theme_state() -> dict:
+    """Läs av Bobs aktuella tema: accentfärg och de färger som räknas
+    fram från den (bakgrund, yta, text, muted, samt de fasta semantiska
+    färgerna error/warning/success/info)."""
+    return theme.get_theme()
 
 
 # ---------------------------------------------------------------------

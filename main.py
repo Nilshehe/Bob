@@ -140,6 +140,7 @@ from tools.model3d_tools import get_tools as get_model3d_tools
 from tools.model3d_complex_shapes import get_complex_tools as get_model3d_complex_tools
 from tools.edit_ai import edit_ai, edit_ai_status, apply_edit_files, list_apply_backups, restore_from_backup
 from gui.backend.bob_integration import get_langchain_tools
+from tools.clipboard import copy_to_clipboard
 gui_tools = get_langchain_tools()
 
 tools = [
@@ -166,7 +167,8 @@ tools = [
     restore_from_backup,
     # *get_model3d_tools(),
     # *get_model3d_complex_tools()
-    *gui_tools
+    *gui_tools,
+    copy_to_clipboard
 ]
 #gui variabler
 def _set_voice_mode(state: bool):
@@ -343,22 +345,6 @@ def resume_after_interrupt(agent, config, decision):
             continue
 
 def _read_line_cancelable(prompt: str, stop_event: threading.Event, poll_interval: float = 0.25):
-    """Som input(prompt), men pollar stop_event var poll_interval:e sekund
-    istället för att blockera tills en rad faktiskt kommer in, så att
-    väntan kan avbrytas direkt (t.ex. Voice Mode aktiverades via
-    knapptrycket i GUI:t medan vi väntade på text).
-
-    Läser via en egen bakgrundstråd + kö istället för select() på stdin -
-    select() på stdin fungerar bara med riktiga sockets på Windows
-    (WinError 10038), och Bob körs där. En blockerande läsartråd +
-    queue.get(timeout=...) ger samma "avbrytbara väntan" men funkar
-    likadant på Windows/Linux/macOS.
-
-    Returnerar None om stop_event sätts under väntan (eller vid EOF på
-    stdin), annars den inskrivna raden (utan radbrytning). En rad som
-    skrivs in medan vi INTE väntar på text (t.ex. under Voice Mode) blir
-    kvar i kön och levereras nästa gång textläget väntar på input,
-    ungefär som en oläst rad i en vanlig terminal-buffer."""
     _ensure_stdin_reader()
     print(prompt, end="", flush=True)
     while True:
@@ -377,15 +363,9 @@ _stdin_reader_lock = threading.Lock()
 
 
 def _stdin_reader_loop():
-    """Körs i en enda daemon-tråd under hela Bobs livstid. Läser stdin
-    rad för rad (blockerande, precis som input() gjorde) och lägger varje
-    rad i _stdin_queue - _read_line_cancelable konsumerar därifrån med en
-    timeout istället för att själv blockera på stdin."""
     while True:
         line = sys.stdin.readline()
         if line == "":
-            # EOF (stdin stängt/omdirigerat från en tom källa) - inget
-            # mer att läsa, låt tråden dö istället för att snurra tomt.
             return
         _stdin_queue.put(line.rstrip("\n"))
 

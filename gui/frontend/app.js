@@ -98,6 +98,11 @@ function handleMessage(msg) {
       break;
 
 
+    case "theme_state":
+      applyThemeState(msg);
+      break;
+
+
     case "sync":
       Object.entries(
         msg.elements || {}
@@ -155,6 +160,42 @@ function sendEvent(payload) {
       JSON.stringify(payload)
     );
   }
+}
+
+
+// ---------------------------------------------------------------------
+// Theme (GUI-specen punkt 24-30, 45, 59-60)
+// ---------------------------------------------------------------------
+// Sätter Bobs tema som CSS-variabler på :root. --holo-blue/--holo-glow
+// (de gamla, hårdkodade variablerna som resten av style.css redan
+// använder) pekas om till samma accent så att BEFINTLIGA widgets också
+// följer med när temat byts, utan att style.css behövde skrivas om.
+
+function _hexToRgba(hex, alpha) {
+  const h = (hex || "#00eaff").replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const r = parseInt(full.substring(0, 2), 16) || 0;
+  const g = parseInt(full.substring(2, 4), 16) || 0;
+  const b = parseInt(full.substring(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function applyThemeState(t) {
+  const root = document.documentElement.style;
+
+  root.setProperty("--bob-accent", t.accent);
+  root.setProperty("--bob-accent-hue", (t.accent_hue ?? 189) + "deg");
+  root.setProperty("--bob-background", t.background);
+  root.setProperty("--bob-surface", t.surface);
+  root.setProperty("--bob-text", t.text);
+  root.setProperty("--bob-muted", t.muted);
+  root.setProperty("--bob-error", t.error);
+  root.setProperty("--bob-warning", t.warning);
+  root.setProperty("--bob-success", t.success);
+
+  // Bakåtkompatibilitet: gamla widgets (punkt 45).
+  root.setProperty("--holo-blue", t.accent);
+  root.setProperty("--holo-glow", _hexToRgba(t.accent, 0.35));
 }
 
 
@@ -270,7 +311,8 @@ function createElementDom(
     elementType,
     body,
     data.props || {},
-    id
+    id,
+    data
   );
 
 
@@ -337,10 +379,24 @@ function buildBody(
   type,
   body,
   props,
-  id
+  id,
+  data
 ) {
 
-  if (type === "status") {
+  if (type === "html") {
+
+    body.classList.add("html-widget-body");
+
+    body.innerHTML =
+      (data && data.html) || "";
+
+    wireHtmlActions(body, id);
+    applyCameraFeeds(body);
+
+  }
+
+
+  else if (type === "status") {
 
     body.innerHTML =
       `<span class="dot"></span>${props.text || "OK"}`;
@@ -549,6 +605,70 @@ function buildBody(
     body.appendChild(area);
 
   }
+}
+
+
+// ---------------------------------------------------------------------
+// HTML-element - actions (punkt 10, 48) och lokal kamera (punkt 57A)
+// ---------------------------------------------------------------------
+// Interaktion i fri/mall-HTML går via data-bob-action (+ valfritt
+// data-bob-value) istället för inline-JS (som saneras bort i backend
+// ändå, se html_sanitizer.py). Klick hanteras för det mesta, men
+// input/textarea/select skickar på "change" istället så man inte
+// bombarderar Bob med ett event per tangenttryck.
+
+function wireHtmlActions(container, id) {
+  container.addEventListener("click", (evt) => {
+    const target = evt.target.closest("[data-bob-action]");
+    if (!target || !container.contains(target)) return;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+    sendEvent({
+      type: "html_action",
+      element_id: id,
+      action: target.dataset.bobAction,
+      value: target.dataset.bobValue ?? null,
+    });
+  });
+
+  container.addEventListener("change", (evt) => {
+    const target = evt.target.closest("[data-bob-action]");
+    if (!target || !container.contains(target)) return;
+    if (!["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+    const value =
+      target.type === "checkbox" ? target.checked : target.value;
+
+    sendEvent({
+      type: "html_action",
+      element_id: id,
+      action: target.dataset.bobAction,
+      value,
+    });
+  });
+}
+
+function applyCameraFeeds(container) {
+  container.querySelectorAll('[data-bob-camera="local"]').forEach((videoEl) => {
+    if (videoEl.dataset.bobCameraBound) return;
+    videoEl.dataset.bobCameraBound = "1";
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.warn(
+        "Bob GUI: kamera kräver https eller localhost - stöds inte här."
+      );
+      return;
+    }
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        videoEl.srcObject = stream;
+      })
+      .catch((err) => {
+        console.warn("Bob GUI: kunde inte starta kameran:", err);
+      });
+  });
 }
 
 
@@ -1144,6 +1264,21 @@ function updateElementDom(
     e.type === "whiteboard"
   ) {
     applyWhiteboardProps(id, fields.props);
+  }
+
+
+  if (
+    fields.html !== undefined &&
+    e.type === "html"
+  ) {
+    const body =
+      e.dom.querySelector(".body");
+
+    if (body) {
+      body.innerHTML = fields.html;
+      wireHtmlActions(body, id);
+      applyCameraFeeds(body);
+    }
   }
 }
 

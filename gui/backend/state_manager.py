@@ -35,6 +35,11 @@ DEFAULT_STATE = {
         # visa i alla öppna fönster (bakåtkompatibelt standardbeteende).
         "windows": [],
     },
+    # Bobs centrala tema (theme.py) - bara accentfärgen sparas, resten
+    # (background/surface/text/muted) räknas fram från den vid behov.
+    "theme": {
+        "accent": "#00eaff",
+    },
 }
 
 

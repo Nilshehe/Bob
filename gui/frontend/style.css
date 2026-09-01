@@ -1,6 +1,19 @@
 :root {
   --holo-blue: #00eaff;
   --holo-glow: rgba(0, 234, 255, 0.35);
+
+  /* Bobs centrala tema (theme.py) - default innan theme_state kommer in
+     över websocket vid anslutning. app.js skriver över dessa (och
+     --holo-blue/--holo-glow ovan) live när temat byts. */
+  --bob-accent: var(--holo-blue);
+  --bob-accent-hue: 189deg;
+  --bob-background: #04141a;
+  --bob-surface: #08222b;
+  --bob-text: #eafcff;
+  --bob-muted: #4fb8c9;
+  --bob-error: #ff4d4f;
+  --bob-warning: #ffcc33;
+  --bob-success: #33d17a;
 }
 
 html, body {

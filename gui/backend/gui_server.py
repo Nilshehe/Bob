@@ -171,6 +171,14 @@ async def ws_endpoint(websocket: WebSocket, window_id: str):
         ensure_ascii=False,
     ))
 
+    # Skicka aktuellt tema så CSS-variablerna sätts rätt direkt, även
+    # efter en omstart av fönstret (theme.py).
+    from gui.backend import theme as theme_module
+    await websocket.send_text(json.dumps(
+        {"type": "theme_state", **theme_module.get_theme()},
+        ensure_ascii=False,
+    ))
+
     # Skicka aktuell fönsterlista så frontend kan rendera kryssrutorna för
     # "vilka fönster ska visa live-texten" i inställningsmenyn.
     try:
@@ -226,6 +234,8 @@ def _handle_event(window_id: str, msg: dict):
                 "props": props,
                 "_origin_window": window_id,
             })
+    elif mtype == "html_action":
+        _handle_html_action(window_id, msg)
 
 
 def _handle_user_chat_message(content: str):
@@ -240,6 +250,59 @@ def _handle_user_chat_message(content: str):
 
     asyncio.run_coroutine_threadsafe(
         event_queue.put({"type": "user_message", "content": content}),
+        bridge_loop,
+    )
+
+
+def _handle_html_action(window_id: str, msg: dict):
+    """data-bob-action-events från HTML-widgetar (GUI-specen punkt 10).
+
+    Specialfall: en html-toggle (component="toggle") flippar sin bundna
+    variabel direkt i backend, precis som den gamla toggle-elementtypen -
+    Bob behöver inte reagera på varje klick själv för att den ska funka.
+    Alla events (även toggle) läggs sedan på Bobs event_queue som ett
+    "html_action" så Bob kan reagera om han vill (t.ex. en knapp med
+    data-bob-action="run" som ska trigga en agent)."""
+    element_id = msg.get("element_id")
+    action = msg.get("action")
+    value = msg.get("value")
+
+    el = state.get_element(element_id) if element_id else None
+
+    if el and el.get("type") == "html" and el.get("component") == "toggle" and action == "toggle":
+        var_name = el.get("props", {}).get("variable")
+        if var_name:
+            from gui.backend.registry import ToolRegistry
+            try:
+                new_value = not bool(ToolRegistry.get_variable(var_name))
+                ToolRegistry.set_variable(var_name, new_value)
+                import gui.backend.html_components as html_components
+                props = {**el.get("props", {}), "value": new_value}
+                rendered, _w, _h = html_components.COMPONENTS["toggle"](props)
+                state.upsert_element(element_id, props=props, html=rendered)
+                manager.send(window_id, {
+                    "type": "update_element",
+                    "element_id": element_id,
+                    "props": props,
+                    "html": rendered,
+                })
+                value = new_value
+            except ValueError:
+                pass  # okänd/icke skrivbar variabel - ignorera klicket
+
+    if bridge_loop is None:
+        return
+
+    from funktioner.queue import event_queue
+
+    asyncio.run_coroutine_threadsafe(
+        event_queue.put({
+            "type": "html_action",
+            "element_id": element_id,
+            "action": action,
+            "value": value,
+            "window_id": window_id,
+        }),
         bridge_loop,
     )
 

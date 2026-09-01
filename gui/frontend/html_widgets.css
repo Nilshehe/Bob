@@ -1,0 +1,161 @@
+/* html_widgets.css
+   Styling för den generella "html"-elementtypen (GUI-specen punkt 1-60).
+   Laddas från index.html, efter style.css. */
+
+.html-widget-body {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.html-c {
+  box-sizing: border-box;
+  color: var(--bob-text);
+  font-family: inherit;
+}
+
+.html-c-text,
+.html-c-panel {
+  padding: 6px;
+}
+
+.html-c-status {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+}
+
+.html-c-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bob-success);
+  box-shadow: 0 0 8px var(--bob-success);
+  margin-right: 8px;
+}
+
+.html-c-button {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 1px solid var(--bob-accent);
+  color: var(--bob-accent);
+  cursor: pointer;
+}
+
+.html-c-button:hover {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--bob-accent) 40%, transparent);
+}
+
+.html-c-input {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 1px solid var(--bob-accent);
+  color: var(--bob-text);
+  font-family: inherit;
+}
+
+.html-c-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.html-c-toggle .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bob-muted);
+}
+
+.html-c-toggle.on .dot {
+  background: var(--bob-success);
+  box-shadow: 0 0 8px var(--bob-success);
+}
+
+.html-c-progress {
+  width: 100%;
+  height: 12px;
+  border: 1px solid var(--bob-accent);
+  margin-top: 6px;
+}
+
+.html-c-progress-fill {
+  height: 100%;
+  background: var(--bob-accent);
+  box-shadow: 0 0 8px var(--bob-accent);
+}
+
+/* Gråskala + temafärgning för media som saknar eget tema (punkt 59-60).
+   Duotone via CSS-filter, läser --bob-accent-hue live så ett temabyte
+   (punkt 45) räcker - widgeten behöver aldrig skapas om.
+   raw=true (klassen "raw") stänger av transformen helt: t.ex. foton
+   eller en riktig kamerabild där färg bär information. */
+.html-c-image,
+.html-c-video,
+.html-c-camera {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter:
+    grayscale(1)
+    sepia(0.6)
+    saturate(4)
+    hue-rotate(var(--bob-accent-hue, 189deg))
+    brightness(0.95);
+}
+
+.html-c-image.raw,
+.html-c-video.raw,
+.html-c-camera.raw {
+  filter: none;
+}
+
+.html-c-browser {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.html-c-browser-bar {
+  display: flex;
+  padding: 4px;
+  border-bottom: 1px solid var(--bob-accent);
+  flex: 0 0 auto;
+}
+
+.html-c-browser-url {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--bob-accent);
+  color: var(--bob-text);
+  font-family: inherit;
+}
+
+.html-c-browser-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+.html-c-browser-hint {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--bob-muted);
+  padding: 4px 6px;
+  opacity: 0.8;
+}
+
+.html-widget-error {
+  color: var(--bob-error);
+  padding: 8px;
+  font-size: 12px;
+}
