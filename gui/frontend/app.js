@@ -373,6 +373,256 @@ function createElementDom(
 
 
 // ---------------------------------------------------------------------
+// Settings-widget (element-typen "config_widget") - byggs helt från
+// props (config.json-innehåll + ev. ollama-modellista + ev.
+// has_api_key/check_result), ingen server-HTML inblandad. Anropas både
+// vid skapande (buildBody) och vid uppdatering (updateElementDom) så
+// att provider-byte, "testa modell"-resultat osv. speglas live.
+// ---------------------------------------------------------------------
+const CONFIG_AUTO_EXCLUDED = new Set([
+  "tools", "interupt_tools", "provider", "model", "api_key_envs",
+]);
+
+const CONFIG_PROVIDERS = {
+  ollama: "Ollama (lokalt)",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  google_genai: "Google (Gemini)",
+  groq: "Groq",
+  mistralai: "Mistral",
+  deepseek: "DeepSeek",
+  xai: "xAI (Grok)",
+  openrouter: "OpenRouter",
+};
+
+function renderConfigWidget(body, props, id) {
+  body.innerHTML = "";
+  body.classList.add("config-widget-body");
+
+  const p = props || {};
+  const config = p.config || {};
+  const models = p.models || [];
+  const checkResult = p.check_result || null;
+
+  const root = document.createElement("div");
+  root.className = "config-widget";
+
+  const title = document.createElement("div");
+  title.className = "config-title";
+  title.textContent = "BOB CONFIGURATION";
+  root.appendChild(title);
+
+  function addSection(text) {
+    const section = document.createElement("div");
+    section.className = "config-section";
+    section.textContent = text;
+    root.appendChild(section);
+  }
+
+  function sendConfigEvent(action, extra) {
+    sendEvent(Object.assign(
+      { type: "html_action", element_id: id, action },
+      extra || {}
+    ));
+  }
+
+  function addToggle(path, label, value) {
+    const row = document.createElement("div");
+    row.className = "config-row";
+
+    const text = document.createElement("span");
+    text.textContent = label;
+
+    const toggle = document.createElement("div");
+    toggle.className = "config-toggle " + (value ? "on" : "off");
+
+    const knob = document.createElement("span");
+    knob.className = "config-toggle-knob";
+    toggle.appendChild(knob);
+
+    toggle.addEventListener("click", () => {
+      sendConfigEvent("config_toggle", { config_path: path, value: !value });
+    });
+
+    row.appendChild(text);
+    row.appendChild(toggle);
+    root.appendChild(row);
+  }
+
+  function addTextInput(path, label, value, opts) {
+    opts = opts || {};
+    const row = document.createElement("div");
+    row.className = "config-row" + (opts.block ? " config-row-block" : "");
+
+    const text = document.createElement("span");
+    text.textContent = label;
+    row.appendChild(text);
+
+    const input = document.createElement(opts.textarea ? "textarea" : "input");
+    input.className = "config-input" + (opts.textarea ? " config-textarea" : "");
+    if (!opts.textarea) input.type = opts.number ? "number" : "text";
+    if (opts.number) input.step = "any";
+    if (opts.placeholder) input.placeholder = opts.placeholder;
+    input.value = value == null ? "" : value;
+
+    input.addEventListener("change", () => {
+      sendConfigEvent(opts.number ? "config_number" : "config_text", {
+        config_path: path,
+        value: input.value,
+      });
+    });
+
+    row.appendChild(input);
+    root.appendChild(row);
+  }
+
+  // --- TOOLS ---
+  addSection("TOOLS");
+  Object.entries(config.tools || {}).forEach(([name, value]) => {
+    addToggle(`tools.${name}`, name, Boolean(value));
+  });
+
+  // --- APPROVAL ---
+  addSection("APPROVAL");
+  Object.entries(config.interupt_tools || {}).forEach(([name, value]) => {
+    addToggle(`interupt_tools.${name}`, name, Boolean(value));
+  });
+
+  // --- SETTINGS: auto-genererad från alla övriga toppnivå-nycklar i
+  // config.json - nya nycklar dyker upp här av sig själva, ingen
+  // kodändring behövs. Typ avgörs från värdets JS-typ: bool -> toggle,
+  // number -> nummerfält, lång/flerradig sträng -> textarea, annars
+  // ett vanligt textfält.
+  addSection("SETTINGS");
+  Object.entries(config).forEach(([key, value]) => {
+    if (CONFIG_AUTO_EXCLUDED.has(key)) return;
+
+    if (typeof value === "boolean") {
+      addToggle(key, key, value);
+    } else if (typeof value === "number") {
+      addTextInput(key, key, value, { number: true });
+    } else {
+      const text = value == null ? "" : String(value);
+      const block = text.length > 60 || text.includes("\n");
+      addTextInput(key, key, text, { textarea: block, block });
+    }
+  });
+
+  // --- MODEL ---
+  addSection("MODEL");
+
+  const providerRow = document.createElement("div");
+  providerRow.className = "config-row";
+  const providerLabel = document.createElement("span");
+  providerLabel.textContent = "Provider";
+  const providerSelect = document.createElement("select");
+  providerSelect.className = "config-input";
+
+  const currentProvider = config.provider || "ollama";
+  Object.entries(CONFIG_PROVIDERS).forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    if (value === currentProvider) option.selected = true;
+    providerSelect.appendChild(option);
+  });
+
+  providerSelect.addEventListener("change", () => {
+    sendConfigEvent("config_provider", { value: providerSelect.value });
+  });
+
+  providerRow.appendChild(providerLabel);
+  providerRow.appendChild(providerSelect);
+  root.appendChild(providerRow);
+
+  if (currentProvider === "ollama") {
+    if (models.length) {
+      const row = document.createElement("div");
+      row.className = "config-row";
+      const label = document.createElement("span");
+      label.textContent = "Modell";
+      const select = document.createElement("select");
+      select.className = "config-input";
+
+      models.forEach((m) => {
+        const option = document.createElement("option");
+        option.value = m;
+        option.textContent = m;
+        if (m === config.model) option.selected = true;
+        select.appendChild(option);
+      });
+
+      select.addEventListener("change", () => {
+        sendConfigEvent("config_model", { model: select.value, value: select.value });
+      });
+
+      row.appendChild(label);
+      row.appendChild(select);
+      root.appendChild(row);
+    } else {
+      const hint = document.createElement("div");
+      hint.className = "config-hint missing";
+      hint.textContent = "Hittar ingen lokal Ollama (körs den på :11434?)";
+      root.appendChild(hint);
+    }
+  } else {
+    const envPath = `api_key_envs.${currentProvider}`;
+    const envValue = (config.api_key_envs && config.api_key_envs[currentProvider]) || "";
+    addTextInput(envPath, ".env-variabel för API-nyckel", envValue, {
+      placeholder: currentProvider.toUpperCase() + "_API_KEY",
+    });
+
+    const hasKey = Boolean(p.has_api_key);
+    const keyHint = document.createElement("div");
+    keyHint.className = "config-hint " + (hasKey ? "ok" : "missing");
+    keyHint.textContent = hasKey
+      ? "\u2713 Nyckel hittad i .env"
+      : "\u2717 Ingen nyckel hittad i .env under det namnet";
+    root.appendChild(keyHint);
+
+    addTextInput("model", "Modell", config.model || "", {
+      placeholder: "t.ex. gpt-4o-mini",
+    });
+
+    const checkRow = document.createElement("div");
+    checkRow.className = "config-row";
+    const checkBtn = document.createElement("button");
+    checkBtn.className = "config-check-model";
+    checkBtn.textContent = "TESTA OM MODELLEN FINNS";
+    checkBtn.addEventListener("click", () => {
+      checkBtn.disabled = true;
+      checkBtn.textContent = "TESTAR...";
+      sendConfigEvent("config_check_model");
+    });
+    checkRow.appendChild(checkBtn);
+    root.appendChild(checkRow);
+
+    if (
+      checkResult &&
+      checkResult.provider === currentProvider &&
+      checkResult.model === config.model
+    ) {
+      const resultEl = document.createElement("div");
+      resultEl.className = "config-hint " + (checkResult.ok ? "ok" : "missing");
+      resultEl.textContent = (checkResult.ok ? "\u2713 " : "\u2717 ") + checkResult.message;
+      root.appendChild(resultEl);
+    }
+  }
+
+  // --- RESTART ---
+  const restart = document.createElement("button");
+  restart.className = "config-restart";
+  restart.textContent = "APPLY & RESTART";
+  restart.addEventListener("click", () => {
+    sendConfigEvent("config_restart");
+  });
+  root.appendChild(restart);
+
+  body.appendChild(root);
+}
+
+
+// ---------------------------------------------------------------------
 // Element body
 // ---------------------------------------------------------------------
 
@@ -469,188 +719,7 @@ function buildBody(
     );
   }
   else if (type === "config_widget") {
-    
-    const config = props.config || {};
-    const modelSection = document.createElement("div");
-    modelSection.className = "config-section";
-    modelSection.textContent = "MODEL";
-
-    root.appendChild(modelSection);
-
-    const modelSelect = document.createElement("select");
-    modelSelect.className = "config-model-select";
-
-    const models = props.models || [];
-
-    models.forEach((model) => {
-
-      const option = document.createElement("option");
-
-      option.value = model;
-      option.textContent = model;
-
-      if (model === config.model) {
-        option.selected = true;
-      }
-
-      modelSelect.appendChild(option);
-    });
-
-    modelSelect.addEventListener("change", () => {
-
-      sendEvent({
-        type: "html_action",
-        element_id: id,
-        action: "config_model",
-        model: modelSelect.value,
-      });
-
-    });
-
-    root.appendChild(modelSelect);
-
-root.appendChild(modelSelect);
-    const root = document.createElement("div");
-    root.className = "config-widget";
-
-    const title = document.createElement("div");
-    title.className = "config-title";
-    title.textContent = "BOB CONFIGURATION";
-
-    root.appendChild(title);
-
-
-    function addSection(titleText) {
-
-      const section = document.createElement("div");
-      section.className = "config-section";
-      section.textContent = titleText;
-
-      root.appendChild(section);
-
-    }
-
-
-    function addToggle(path, label, value) {
-
-      const row = document.createElement("div");
-      row.className = "config-row";
-
-      const text = document.createElement("span");
-      text.textContent = label;
-
-      const toggle = document.createElement("div");
-
-      toggle.className =
-        "config-toggle " +
-        (value ? "on" : "off");
-
-      const knob = document.createElement("span");
-      knob.className = "config-toggle-knob";
-
-      toggle.appendChild(knob);
-
-      toggle.addEventListener("click", () => {
-
-        const newValue =
-          !toggle.classList.contains("on");
-
-        toggle.classList.toggle(
-          "on",
-          newValue
-        );
-
-        toggle.classList.toggle(
-          "off",
-          !newValue
-        );
-
-        sendEvent({
-          type: "html_action",
-          element_id: id,
-          action: "config_toggle",
-          config_path: path,
-        });
-
-      });
-
-      row.appendChild(text);
-      row.appendChild(toggle);
-
-      root.appendChild(row);
-    }
-
-
-    addSection("TOOLS");
-
-    Object.entries(
-      config.tools || {}
-    ).forEach(([name, value]) => {
-
-      addToggle(
-        `tools.${name}`,
-        name,
-        Boolean(value)
-      );
-
-    });
-
-
-    addSection("APPROVAL");
-
-    Object.entries(
-      config.interupt_tools || {}
-    ).forEach(([name, value]) => {
-
-      addToggle(
-        `interupt_tools.${name}`,
-        name,
-        Boolean(value)
-      );
-
-    });
-
-
-    addSection("FEATURES");
-
-    addToggle(
-      "TALKING",
-      "TALKING",
-      Boolean(config.TALKING)
-    );
-
-    addToggle(
-      "VOICE_MODE",
-      "VOICE_MODE",
-      Boolean(config.VOICE_MODE)
-    );
-
-
-    const restart =
-      document.createElement("button");
-
-    restart.className =
-      "config-restart";
-
-    restart.textContent =
-      "APPLY & RESTART";
-
-    restart.addEventListener(
-      "click",
-      () => {
-
-        sendEvent({
-          type: "html_action",
-          element_id: id,
-          action: "config_restart",
-        });
-
-      }
-    );
-
-    root.appendChild(restart);
-
-    body.appendChild(root);
+    renderConfigWidget(body, props, id);
   }
 
 
@@ -1448,6 +1517,17 @@ function updateElementDom(
     e.type === "whiteboard"
   ) {
     applyWhiteboardProps(id, fields.props);
+  }
+
+
+  if (
+    fields.props &&
+    e.type === "config_widget"
+  ) {
+    const body = e.dom.querySelector(".body");
+    if (body) {
+      renderConfigWidget(body, fields.props, id);
+    }
   }
 
 

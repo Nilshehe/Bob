@@ -160,90 +160,15 @@
   font-size: 12px;
 }
 
-.html-c-config-widget {
-  padding: 18px;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-.config-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 18px;
-}
-
-.config-section {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.6;
-  margin-top: 16px;
-  margin-bottom: 8px;
-}
-
-.config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 38px;
-}
-
-.config-row > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.config-toggle {
-  width: 46px;
-  height: 26px;
-  border-radius: 999px;
-  position: relative;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: 0.15s ease;
-}
-
-.config-toggle.on {
-  background: #22c55e;
-}
-
-.config-toggle.off {
-  background: #555;
-}
-
-.config-toggle-knob {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  transition: 0.15s ease;
-}
-
-.config-toggle.on .config-toggle-knob {
-  left: 23px;
-}
-
-.config-restart {
-  width: 100%;
-  margin-top: 20px;
-  padding: 12px;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 700;
-}
-.config-widget {
-  width: 100%;
-  height: 100%;
-  max-height: 100%;
-  box-sizing: border-box;
-  padding: 16px;
+.config-widget-body {
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.config-widget {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
 }
 
 .config-title {
@@ -269,10 +194,19 @@
   gap: 12px;
 }
 
+.config-row-block {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .config-row > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.config-row-block > span {
+  margin-bottom: 4px;
 }
 
 .config-toggle {
@@ -308,6 +242,67 @@
   left: 23px;
 }
 
+.config-input {
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: inherit;
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 220px;
+}
+
+.config-row-block .config-input {
+  max-width: none;
+  width: 100%;
+}
+
+select.config-input {
+  cursor: pointer;
+}
+
+.config-textarea {
+  resize: vertical;
+  min-height: 70px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.config-hint {
+  font-size: 11px;
+  padding: 4px 2px 10px;
+  opacity: 0.85;
+}
+
+.config-hint.ok {
+  color: #22c55e;
+}
+
+.config-hint.missing {
+  color: #f87171;
+}
+
+.config-check-model {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.config-check-model:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .config-restart {
   width: 100%;
   margin-top: 18px;
@@ -316,16 +311,4 @@
   border-radius: 7px;
   cursor: pointer;
   font-weight: 700;
-}
-.config-model-select {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 10px;
-  margin-bottom: 8px;
-  border-radius: 7px;
-  border: 1px solid rgba(128, 128, 128, 0.35);
-  background: inherit;
-  color: inherit;
-  font-size: 14px;
-  cursor: pointer;
 }

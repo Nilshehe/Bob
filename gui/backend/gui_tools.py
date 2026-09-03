@@ -175,10 +175,18 @@ def create_config_widget(
     h: int = 700,
     element_id: Optional[str] = None,
 ) -> dict:
-    """Skapa en widget med Bobs konfiguration.
+    """Skapa en widget med Bobs konfiguration (skrollbar).
 
-    Widgeten visar alla boolean-inställningar från config.json som
-    toggles och har en Apply & Restart-knapp.
+    Visar TOOLS/APPROVAL som toggles, en auto-genererad SETTINGS-sektion
+    för alla övriga skalära värden i config.json (temperature, num_ctx,
+    system_prompt, TALKING, VOICE_MODE, m.m. - nya nycklar i config.json
+    dyker upp här automatiskt, ingen kodändring behövs), samt en
+    MODEL-sektion: välj provider ("ollama" ger en lista med lokalt
+    installerade modeller; en API-provider ger fri text för modellnamn,
+    ett fält för vilken .env-variabel som har API-nyckeln, en
+    OK/saknas-indikator för den nyckeln, och en "testa om modellen
+    finns"-knapp). Apply & Restart-knappen startar om agenten med den
+    nya konfigurationen.
 
     Args:
         window_id: Fönstret där widgeten ska placeras.
@@ -188,7 +196,7 @@ def create_config_widget(
         h: Höjd.
         element_id: Valfritt element-id.
     """
-    from config_manager import load_config, get_ollama_models
+    from config_manager import load_config, get_ollama_models, has_api_key
 
     config = load_config()
     models = get_ollama_models()
@@ -211,6 +219,7 @@ def create_config_widget(
         props={
             "config": config,
             "models": models,
+            "has_api_key": has_api_key(config.get("provider", "ollama")),
         }
     )
 
@@ -877,7 +886,7 @@ def update_html(
 def create_html_component(
     component: Literal[
         "text", "panel", "status", "button", "input", "toggle", "progress",
-        "image", "video", "camera_feed", "browser","config_widget",
+        "image", "video", "camera_feed", "browser",
     ],
     window_id: str,
     x: int = 40,
@@ -1602,3 +1611,43 @@ def set_whiteboard_text(element_id: str, text: str) -> dict:
     )
 
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------
+# På/av för hela GUI:t
+# ---------------------------------------------------------------------
+# GUI:t är avstängt som standard när Bob:s process startar (main.py
+# startar inte längre launch_gui() automatiskt). Bob slår på/av det
+# själv med de här två verktygen. Importerar main_gui lokalt (inte
+# module-nivå) eftersom main_gui.py importerar den här filen för att
+# registrera verktygen - en import i toppen här skulle bli cirkulär.
+
+@tool(parse_docstring=True)
+def start_gui() -> dict:
+    """Starta Bobs GUI (öppnar fönstret/fönstren på skärmen). GUI:t är
+    AVSTÄNGT som standard när Bob startar - använd det här verktyget när
+    du eller användaren vill se/använda det grafiska gränssnittet.
+    No-op om GUI:t redan är igång."""
+    import gui.backend.main_gui as main_gui
+
+    main_gui.start_gui()
+    return {"ok": True, "running": main_gui.is_gui_running()}
+
+
+@tool(parse_docstring=True)
+def stop_gui() -> dict:
+    """Stäng av Bobs GUI (stänger alla öppna fönster). Kan startas igen
+    senare med start_gui. No-op om GUI:t redan är avstängt."""
+    import gui.backend.main_gui as main_gui
+
+    main_gui.stop_gui()
+    return {"ok": True, "running": main_gui.is_gui_running()}
+
+
+@tool(parse_docstring=True)
+def get_gui_status() -> dict:
+    """Kolla om Bobs GUI är igång eller avstängt just nu, utan att ändra
+    något."""
+    import gui.backend.main_gui as main_gui
+
+    return {"running": main_gui.is_gui_running()}

@@ -255,88 +255,150 @@ def _handle_user_chat_message(content: str):
     )
 
 
-def _handle_html_action(window_id: str, msg: dict):
-    """data-bob-action-events från HTML-widgetar (GUI-specen punkt 10).
+def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict = None):
+    """Läser om config.json (+ ev. ollama-modellista + API-nyckelstatus)
+    och skickar de nya props:en till settings-widgeten. Widgeten byggs
+    helt av frontend-JS utifrån props (se app.js: renderConfigWidget) -
+    det finns ingen server-renderad HTML att uppdatera här, bara props."""
+    from config_manager import load_config, get_ollama_models, has_api_key
 
-    Specialfall: en html-toggle (component="toggle") flippar sin bundna
-    variabel direkt i backend, precis som den gamla toggle-elementtypen -
-    Bob behöver inte reagera på varje klick själv för att den ska funka.
-    Alla events (även toggle) läggs sedan på Bobs event_queue som ett
-    "html_action" så Bob kan reagera om han vill (t.ex. en knapp med
-    data-bob-action="run" som ska trigga en agent)."""
+    el = state.get_element(element_id)
+    if not el:
+        return
+
+    config = load_config()
+    provider = config.get("provider", "ollama")
+
+    props = {
+        **el.get("props", {}),
+        "config": config,
+        "models": get_ollama_models(),
+        "has_api_key": has_api_key(provider),
+    }
+    if extra_props:
+        props.update(extra_props)
+
+    state.upsert_element(element_id, props=props)
+    manager.send(window_id, {
+        "type": "update_element",
+        "element_id": element_id,
+        "props": props,
+    })
+
+
+def _handle_config_toggle(window_id: str, element_id: str, config_path: str):
+    from config_manager import get_config_value, set_config_value
+
+    current = bool(get_config_value(config_path, False))
+    set_config_value(config_path, not current)
+    _rerender_config_widget(window_id, element_id)
+
+
+def _handle_config_set(window_id: str, element_id: str, config_path: str, value, numeric: bool = False):
+    from config_manager import set_config_value
+
+    if numeric:
+        try:
+            value = float(value)
+            if value.is_integer():
+                value = int(value)
+        except (TypeError, ValueError):
+            return
+
+    set_config_value(config_path, value)
+
+    # Byter man provider/modell/API-nyckelvariabel är ett tidigare
+    # "testa modell"-resultat inte längre relevant - nollställ det så
+    # widgeten inte visar ett missvisande gammalt resultat.
+    extra = None
+    if config_path == "provider" or config_path == "model" or config_path.startswith("api_key_envs."):
+        extra = {"check_result": None}
+
+    _rerender_config_widget(window_id, element_id, extra_props=extra)
+
+
+def _handle_config_check_model(window_id: str, element_id: str):
+    from config_manager import load_config, check_model
+
+    config = load_config()
+    provider = config.get("provider", "ollama")
+    model = config.get("model", "")
+    result = check_model(provider, model)
+
+    _rerender_config_widget(window_id, element_id, extra_props={
+        "check_result": {"provider": provider, "model": model, **result},
+    })
+
+
+def _handle_html_action(window_id: str, msg: dict):
+    """data-bob-action-events från HTML-widgetar (GUI-specen punkt 10)
+    OCH från settings-widgeten (element-typen "config_widget", som
+    byggs av frontend-JS utifrån props istället för server-HTML).
+
+    Specialfall som hanteras direkt i backend, utan att Bob behöver
+    reagera själv: html-toggle (component="toggle"), browser-widgetens
+    adressfält, och alla config_*-actions från settings-widgeten.
+    Alla events läggs ändå på Bobs event_queue som ett "html_action"
+    (utom restart, som är en egen händelsetyp main.py redan lyssnar på)
+    så Bob kan reagera om han vill."""
     element_id = msg.get("element_id")
     action = msg.get("action")
     value = msg.get("value")
+    config_path = msg.get("config_path")
 
-    config_path = None
+    if action == "config_toggle" and config_path:
+        _handle_config_toggle(window_id, element_id, config_path)
+        return
+
+    if action in ("config_text", "config_number") and config_path:
+        _handle_config_set(window_id, element_id, config_path, value, numeric=(action == "config_number"))
+        return
+
+    if action == "config_provider":
+        _handle_config_set(window_id, element_id, "provider", value)
+        return
 
     if action == "config_model":
-        model = msg.get("model")
-
+        model = msg.get("model") or value
         if model:
-            from config_manager import set_config_value
-
-            set_config_value(
-                "model",
-                model,
-            )
-
+            _handle_config_set(window_id, element_id, "model", model)
         return
 
-    if config_path:
-        from config_manager import (
-            get_config_value,
-            set_config_value,
-        )
-
-        current = bool(
-            get_config_value(
-                config_path,
-                False,
-            )
-        )
-
-        set_config_value(
-            config_path,
-            not current,
-        )
-
-        el = state.get_element(element_id)
-
-        if el:
-            from gui.backend import html_components
-
-            props = {
-                **el.get("props", {}),
-                "config": load_config(),
-            }
-
-            rendered, _, _ = (
-                html_components.COMPONENTS[
-                    "config_widget"
-                ](props)
-            )
-
-            state.upsert_element(
-                element_id,
-                props=props,
-                html=rendered,
-            )
-
-            manager.send(
-                window_id,
-                {
-                    "type": "update_element",
-                    "element_id": element_id,
-                    "props": props,
-                    "html": rendered,
-                },
-            )
-
+    if action == "config_check_model":
+        _handle_config_check_model(window_id, element_id)
         return
 
+    if action == "config_restart":
+        if bridge_loop is not None:
+            from funktioner.queue import event_queue
+            asyncio.run_coroutine_threadsafe(
+                event_queue.put({"type": "restart_agent"}),
+                bridge_loop,
+            )
+        return
 
     el = state.get_element(element_id) if element_id else None
+
+    if el and el.get("type") == "html" and el.get("component") == "browser" and action == "browser_navigate":
+        # Adressfältet i browser-widgeten (GUI-specen: html_components.py
+        # _browser) - låt användaren navigera direkt utan att Bob behöver
+        # reagera på varje inskriven URL för att det ska funka.
+        url = (value or "").strip()
+        if url:
+            if "://" not in url:
+                url = "https://" + url
+            from gui.backend import html_components
+
+            props = {**el.get("props", {}), "url": url}
+            rendered, _w, _h = html_components.COMPONENTS["browser"](props)
+            state.upsert_element(element_id, props=props, html=rendered)
+            manager.send(window_id, {
+                "type": "update_element",
+                "element_id": element_id,
+                "props": props,
+                "html": rendered,
+            })
+            value = url
 
     if el and el.get("type") == "html" and el.get("component") == "toggle" and action == "toggle":
         var_name = el.get("props", {}).get("variable")

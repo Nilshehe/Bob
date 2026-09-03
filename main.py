@@ -3,9 +3,9 @@ from langchain.agents.middleware import HumanInTheLoopMiddleware, AgentMiddlewar
 from langchain.agents import create_agent
 from langchain.messages import AIMessageChunk, ToolMessage
 from funktioner.response_cleaner import get_last_text
-from funktioner.formater import formater
 from langgraph.types import Command
 from typing import Any
+import os
 from voice.live_stt import stt_main
 from voice.wake_word import wait_for_wake_word
 from tools.code_ai import register_notify_callback
@@ -14,13 +14,11 @@ from tools.edit_ai import register_notify_callback as register_edit_notify_callb
 from tools.approval_agent import run_approval_conversation
 from voice.tts import speak
 import asyncio
-import sys
-import queue
 import threading
 from funktioner.queue import event_queue
 from funktioner import metrics
+from funktioner.io_utils import broadcast_voice_state as _broadcast_voice_state, broadcast_agent_stream as _broadcast_agent_stream, emit as _emit, read_line_cancelable as _read_line_cancelable
 from gui.backend.registry import ToolRegistry
-from gui.backend.main_gui import launch_gui
 import gui.backend.gui_server as gui_server
 from langchain_core.tools import tool
 from voice.state import register_state_callback
@@ -79,44 +77,10 @@ register_edit_notify_callback(_on_edit_job_done)
 _voice_mode_changed = threading.Event()
 
 
-def _broadcast_voice_state(**fields):
-    """Skickar röstläges-status (på/av, vaken, lyssnar, ljudnivå) till alla
-    öppna GUI-fönster, så den permanenta text-inputen kan gömmas och
-    väckningscirkeln kan animeras i realtid."""
-    try:
-        gui_server.manager.broadcast({"type": "voice_state", **fields})
-    except Exception:
-        pass
-    
-def _voice_state_to_gui(**fields):
-    _broadcast_voice_state(**fields)
-
-
-register_state_callback(_voice_state_to_gui)
-
-
-def _broadcast_agent_stream(node_type, content):
-    """Speglar samma svarsström som formater() skriver ut i terminalen till
-    GUI:ts live-svarswidget (text/reasoning/tool_call_chunk/interrupt).
-    Skickas bara till de fönster som är valda i svarswidgetens
-    fönster-filter (tom lista = alla fönster)."""
-    if not content:
-        return
-    try:
-        gui_server.broadcast_agent_stream({
-            "type": "agent_stream",
-            "node_type": node_type,
-            "content": content,
-        })
-    except Exception:
-        pass
-
-
-def _emit(response, node_type):
-    """Skriver ut i terminalen (som förut) och speglar samtidigt till
-    GUI:ts live-svarswidget."""
-    formater(response, node_type)
-    _broadcast_agent_stream(node_type, response)
+# _broadcast_voice_state, _broadcast_agent_stream och _emit flyttade till
+# funktioner/io_utils.py (importerade ovan) - main.py håller bara
+# orkestreringen (event-loop, agent-anrop, avbrott).
+register_state_callback(_broadcast_voice_state)
 
 from langgraph.checkpoint.memory import InMemorySaver
 memory_saver = InMemorySaver()
@@ -269,14 +233,35 @@ config = {"configurable": {"thread_id": "some_id"}}
 
 def make_agent() -> Any:
     config = load_config()
+    provider = config.get("provider", "ollama")
 
-    model = ChatOllama(
-        model=config["model"],
-        temperature=config.get("temperature", 0.7),
-        reasoning=True,
-        num_ctx=config.get("num_ctx", 8192),
-        num_predict=config.get("num_predict", 8192),
-    )
+    if provider == "ollama":
+        model = ChatOllama(
+            model=config["model"],
+            temperature=config.get("temperature", 0.7),
+            reasoning=True,
+            num_ctx=config.get("num_ctx", 8192),
+            num_predict=config.get("num_predict", 8192),
+        )
+    else:
+        # API-provider (openai/anthropic/... - se config_manager.API_PROVIDERS).
+        # Kräver att motsvarande langchain-integrationspaket är
+        # installerat (t.ex. langchain-openai). Nyckeln hämtas från den
+        # .env-variabel som är inställd för providern i settings-
+        # widgeten (config_manager.get_api_key_env_name), inte från
+        # providerns "vanliga" env-variabelnamn - så du kan döpa .env-
+        # variabeln fritt.
+        from langchain.chat_models import init_chat_model
+        import config_manager
+
+        api_key = os.environ.get(config_manager.get_api_key_env_name(provider))
+
+        model = init_chat_model(
+            config["model"],
+            model_provider=provider,
+            temperature=config.get("temperature", 0.7),
+            api_key=api_key,
+        )
 
     enabled_tools = get_enabled_tools()
 
@@ -406,39 +391,8 @@ def resume_after_interrupt(agent, config, decision):
         else:
             continue
 
-def _read_line_cancelable(prompt: str, stop_event: threading.Event, poll_interval: float = 0.25):
-    _ensure_stdin_reader()
-    print(prompt, end="", flush=True)
-    while True:
-        if stop_event.is_set():
-            print()  # ny rad så prompten inte hänger kvar mitt i raden
-            return None
-        try:
-            return _stdin_queue.get(timeout=poll_interval)
-        except queue.Empty:
-            continue
-
-
-_stdin_queue: "queue.Queue[str]" = queue.Queue()
-_stdin_reader_started = False
-_stdin_reader_lock = threading.Lock()
-
-
-def _stdin_reader_loop():
-    while True:
-        line = sys.stdin.readline()
-        if line == "":
-            return
-        _stdin_queue.put(line.rstrip("\n"))
-
-
-def _ensure_stdin_reader():
-    global _stdin_reader_started
-    with _stdin_reader_lock:
-        if _stdin_reader_started:
-            return
-        _stdin_reader_started = True
-    threading.Thread(target=_stdin_reader_loop, daemon=True).start()
+# _read_line_cancelable (och stdin-läsningen den bygger på) flyttad till
+# funktioner/io_utils.py (importerad ovan).
 
 async def input_loop(input_enabled):
     global VOICE_MODE
@@ -603,4 +557,4 @@ def run_bob():
 if __name__ == "__main__":
     bob_thread = threading.Thread(target=run_bob, daemon=True)
     bob_thread.start()
-    launch_gui()
+    bob_thread.join()

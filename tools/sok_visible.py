@@ -31,10 +31,25 @@ def _safe_path(relative_path: str) -> Path:
  
  
 # ---------------------------------------------------------------------------
-# Persistent, SYNLIG browser-session som körs i EN dedikerad tråd.
-# Alla Playwright-anrop måste ske i den tråden -> vi skickar jobb till den
-# via en kö istället för att röra page/browser direkt från tool-funktionerna.
+# Persistent browser-session som körs i EN dedikerad tråd. Om Bobs GUI
+# (guin) är på körs den headless och speglas dit (search_bridge.py); om
+# guin är avstängt körs den istället som ett vanligt, synligt fönster på
+# skärmen (som innan guin-spegling fanns) - beslutet tas när
+# webbläsartråden startas, se _gui_is_on()/_run(). Alla Playwright-anrop
+# måste ske i den tråden -> vi skickar jobb till den via en kö istället
+# för att röra page/browser direkt från tool-funktionerna.
 # ---------------------------------------------------------------------------
+def _gui_is_on() -> bool:
+    """True om Bobs GUI (guin) är igång just nu. Avgör om
+    webbläsarsessionen ska köras headless (speglad i guin) eller som ett
+    vanligt, synligt OS-fönster (om guin är avstängt)."""
+    try:
+        import gui.backend.main_gui as main_gui
+        return main_gui.is_gui_running()
+    except Exception:
+        return False
+
+
 class _BrowserWorker:
     _instance: Optional["_BrowserWorker"] = None
     _instance_lock = threading.Lock()
@@ -51,11 +66,16 @@ class _BrowserWorker:
  
     def _run(self):
         try:
+            headless = _gui_is_on()
+            launch_kwargs = {"headless": headless}
+            if not headless:
+                # guin är avstängt - kör den vanliga, synliga
+                # webbläsaren istället (samma beteende som innan
+                # guin-speglingen fanns).
+                launch_kwargs["args"] = ["--start-maximized"]
+
             with sync_playwright() as p:
-                browser = p.chromium.launch(
-                    headless=False,  # synligt fönster på skärmen
-                    args=["--start-maximized"],
-                )
+                browser = p.chromium.launch(**launch_kwargs)
                 context = browser.new_context(
                     accept_downloads=True,
                     no_viewport=True,
@@ -112,7 +132,12 @@ def close_browser():
  
 @tool
 def open_browser() -> str:
-    """Start the visible browser session if it's not already running. Call this before using other browser tools."""
+    """Start the browser session if it's not already running. Call this before using other browser tools.
+
+    Runs headless and mirrors into Bob's GUI (guin) if guin is currently
+    on; otherwise opens a normal, visible OS browser window instead
+    (guin off = same behavior as before GUI mirroring existed).
+    """
     _BrowserWorker.instance()
     return "Browser started and ready."
  
@@ -129,22 +154,26 @@ def _search_visible_webpage_impl(page: Page, url: str, query: str, max_matches: 
  
     full_text = page.evaluate("document.body.innerText") or ""
     if not full_text.strip():
+        _mirror_to_gui(url, query, "Page does not seem to contain any visible text.")
         return "Page does not seem to contain any visible text."
- 
+
     pattern = re.compile(re.escape(query), re.IGNORECASE)
     matches = list(pattern.finditer(full_text))
- 
+
     if not matches:
+        _mirror_to_gui(url, query, f"No match for '{query}' on page {url}.")
         return f"No match for '{query}' on page {url}."
- 
+
     results = []
     for m in matches[:max_matches]:
         start = max(0, m.start() - 100)
         end = min(len(full_text), m.end() + 100)
         snippet = full_text[start:end].strip().replace("\n", " ")
         results.append(f"...{snippet}...")
- 
-    # Markera visuellt på sidan (highlight första träffen) så det syns på skärmen
+
+    # Markera visuellt på sidan (highlight första träffen) - körs på den
+    # headless sidan och syns inte direkt, men träffarna nedan speglas till
+    # guin via _mirror_to_gui.
     try:
         page.evaluate(
             """(q) => {
@@ -162,9 +191,22 @@ def _search_visible_webpage_impl(page: Page, url: str, query: str, max_matches: 
         )
     except Exception:
         pass
- 
+
     header = f"Found {len(matches)} matches for '{query}' ({url}), showing {len(results)}:\n"
-    return header + "\n---\n".join(results)
+    result_text = header + "\n---\n".join(results)
+    _mirror_to_gui(url, query, result_text)
+    return result_text
+
+
+def _mirror_to_gui(url: str, query: str, result_text: str) -> None:
+    """Speglar sökningen (sidan + träffarna) i Bobs eget GUI istället för
+    ett separat, synligt OS-fönster. No-op om GUI:t är avstängt - får
+    aldrig krascha själva sökningen."""
+    try:
+        from gui.backend import search_bridge
+        search_bridge.show_search_in_gui(url=url, query=query, result_text=result_text)
+    except Exception:
+        pass
  
  
 @tool

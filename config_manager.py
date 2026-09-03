@@ -1,8 +1,15 @@
 import json
+import os
 from pathlib import Path
 from threading import RLock
 from typing import Any
 import requests
+
+try:
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv(usecwd=True), override=False)
+except Exception:
+    pass
 
 
 def get_ollama_models():
@@ -23,6 +30,39 @@ def get_ollama_models():
 
     except Exception:
         return []
+
+
+# ---------------------------------------------------------------------
+# Modell-providers
+# ---------------------------------------------------------------------
+# "ollama" körs lokalt och behöver ingen API-nyckel - övriga är API-
+# providers som langchains init_chat_model() stödjer (model_provider=
+# nyckeln nedan). default_key_env är bara ett förslag som fylls i
+# första gången en provider väljs i settings-widgeten - användaren kan
+# döpa om den till vad .env-variabeln faktiskt heter hos dem
+# (config.json: api_key_envs.<provider>).
+API_PROVIDERS = {
+    "ollama": {"label": "Ollama (lokalt)", "default_key_env": None},
+    "openai": {"label": "OpenAI", "default_key_env": "OPENAI_API_KEY"},
+    "anthropic": {"label": "Anthropic", "default_key_env": "ANTHROPIC_API_KEY"},
+    "google_genai": {"label": "Google (Gemini)", "default_key_env": "GOOGLE_API_KEY"},
+    "groq": {"label": "Groq", "default_key_env": "GROQ_API_KEY"},
+    "mistralai": {"label": "Mistral", "default_key_env": "MISTRAL_API_KEY"},
+    "deepseek": {"label": "DeepSeek", "default_key_env": "DEEPSEEK_API_KEY"},
+    "xai": {"label": "xAI (Grok)", "default_key_env": "XAI_API_KEY"},
+    "openrouter": {"label": "OpenRouter", "default_key_env": "OPENROUTER_API_KEY"},
+}
+
+# Providers som har ett OpenAI-kompatibelt GET /models-listan-API - vi
+# kan använda samma koll-logik för alla dessa (se check_model()).
+_OPENAI_STYLE_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "mistralai": "https://api.mistral.ai/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "xai": "https://api.x.ai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+}
 
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
@@ -113,3 +153,104 @@ def is_interrupt_enabled(name: str) -> bool:
             False,
         )
     )
+
+
+def get_provider() -> str:
+    return get_config_value("provider", "ollama") or "ollama"
+
+
+def get_api_key_env_name(provider: str) -> str:
+    """Namnet på den .env-variabel som ska innehålla API-nyckeln för
+    `provider`. Användaren kan döpa om den fritt via settings-widgeten
+    (config.json: api_key_envs.<provider>) - annars föreslås ett
+    standardnamn."""
+    configured = get_config_value(f"api_key_envs.{provider}")
+    if configured:
+        return configured
+    return (API_PROVIDERS.get(provider) or {}).get("default_key_env") or f"{provider.upper()}_API_KEY"
+
+
+def has_api_key(provider: str) -> bool:
+    """True om .env-variabeln som är inställd för `provider` faktiskt
+    innehåller något just nu."""
+    env_name = get_api_key_env_name(provider)
+    return bool(env_name and os.environ.get(env_name))
+
+
+def check_model(provider: str, model: str) -> dict:
+    """Kollar om `model` faktiskt finns hos `provider` just nu.
+
+    - ollama: frågar den lokala Ollama-servern (samma lista som
+      get_ollama_models()).
+    - API-providers: listar modeller via providerns REST-API med
+      nyckeln från .env-variabeln som är inställd för providern, och
+      letar efter en exakt träff.
+
+    Returnerar alltid {"ok": bool, "message": str} - kastar aldrig.
+    """
+    model = (model or "").strip()
+    if not model:
+        return {"ok": False, "message": "Inget modellnamn angivet."}
+
+    try:
+        if provider == "ollama":
+            names = get_ollama_models()
+            if model in names:
+                return {"ok": True, "message": f"'{model}' finns i din lokala Ollama."}
+            return {
+                "ok": False,
+                "message": f"Hittar inte '{model}' i din lokala Ollama ({len(names)} modeller installerade).",
+            }
+
+        env_name = get_api_key_env_name(provider)
+        api_key = os.environ.get(env_name)
+        if not api_key:
+            return {"ok": False, "message": f"Ingen API-nyckel hittad i .env-variabeln '{env_name}'."}
+
+        if provider in _OPENAI_STYLE_BASE_URLS:
+            base = _OPENAI_STYLE_BASE_URLS[provider]
+            resp = requests.get(
+                f"{base}/models",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            ids = [m.get("id") for m in resp.json().get("data", [])]
+            if model in ids:
+                return {"ok": True, "message": f"'{model}' finns hos {provider}."}
+            return {
+                "ok": False,
+                "message": f"Hittar inte '{model}' hos {provider} ({len(ids)} modeller tillgängliga för din nyckel).",
+            }
+
+        if provider == "anthropic":
+            resp = requests.get(
+                f"https://api.anthropic.com/v1/models/{model}",
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return {"ok": True, "message": f"'{model}' finns hos Anthropic."}
+            if resp.status_code == 404:
+                return {"ok": False, "message": f"Hittar inte '{model}' hos Anthropic."}
+            resp.raise_for_status()
+
+        if provider == "google_genai":
+            resource = model if model.startswith("models/") else f"models/{model}"
+            resp = requests.get(
+                f"https://generativelanguage.googleapis.com/v1beta/{resource}",
+                params={"key": api_key},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return {"ok": True, "message": f"'{model}' finns hos Google."}
+            if resp.status_code == 404:
+                return {"ok": False, "message": f"Hittar inte '{model}' hos Google."}
+            resp.raise_for_status()
+
+        return {"ok": False, "message": f"Vet inte hur man kollar modeller hos providern '{provider}' än."}
+
+    except requests.exceptions.RequestException as e:
+        return {"ok": False, "message": f"Kunde inte nå {provider}: {e}"}
+    except Exception as e:
+        return {"ok": False, "message": f"Fel vid kontroll: {e}"}

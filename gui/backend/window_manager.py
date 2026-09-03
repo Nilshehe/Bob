@@ -99,6 +99,13 @@ def close_window(window_id: str):
     state.remove_window(window_id)
 
 
+def close_all_windows():
+    """Stäng samtliga öppna fönster (t.ex. när GUI:t stängs av helt via
+    main_gui.stop_gui)."""
+    for window_id in list(_windows.keys()):
+        close_window(window_id)
+
+
 def restore_windows():
     """Återskapar varje fönster som fanns kvar vid senaste avstängningen."""
     for window_id, w in list(state.state["windows"].items()):

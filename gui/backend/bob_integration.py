@@ -10,6 +10,7 @@ from langchain_core.tools import BaseTool
 from gui.backend.registry import ToolRegistry
 import gui.backend.gui_tools as gui_tools_module  # registrerar GUI-verktygen
 import gui.backend.window_manager as wm
+import gui.backend.main_gui as main_gui
 
 
 def get_langchain_tools():
@@ -34,9 +35,18 @@ def _tools_snippet(tools) -> str:
 
 
 def gui_system_prompt() -> str:
-    windows = wm.get_windows()
+    gui_on = main_gui.is_gui_running()
+    windows = wm.get_windows() if gui_on else []
 
-    if windows:
+    if not gui_on:
+        windows_block = (
+            "\n\nThe GUI is currently OFF (it starts off by default, "
+            "nothing is on screen and no window-based tool will work). "
+            "Call start_gui first if you or the user want to see/use it — "
+            "then create_window/create_element etc. work as normal. Call "
+            "stop_gui to turn it off again."
+        )
+    elif windows:
         window_lines = "\n".join(
             f"- window_id=\"{w['window_id']}\" title=\"{w.get('title')}\" "
             f"({w.get('element_count', 0)} element)"
@@ -49,14 +59,17 @@ def gui_system_prompt() -> str:
         )
     else:
         windows_block = (
-            "\n\nNo windows are currently open. Call create_window first "
-            "and use the window_id it returns — do not guess one."
+            "\n\nThe GUI is on but no windows are currently open. Call "
+            "create_window first and use the window_id it returns — do not "
+            "guess one."
         )
 
     return (
-        "You control a dynamic holographic GUI. You can create, move, "
-        "modify, and delete elements, as well as manage multiple windows "
-        "across multiple screens using the tools below."
+        "You control a dynamic holographic GUI, which is OFF by default "
+        "when you start — turn it on with start_gui and off with stop_gui. "
+        "When it's on, you can create, move, modify, and delete elements, "
+        "as well as manage multiple windows across multiple screens using "
+        "the tools below."
         "\n\nAGENT MONITOR:\n"
         "Use create_agent_monitor when the user wants to see a background "
         "agent working live. Supported agents are code_ai, research_ai, "
