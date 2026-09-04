@@ -260,7 +260,10 @@ def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict =
     och skickar de nya props:en till settings-widgeten. Widgeten byggs
     helt av frontend-JS utifrån props (se app.js: renderConfigWidget) -
     det finns ingen server-renderad HTML att uppdatera här, bara props."""
-    from config_manager import load_config, get_ollama_models, has_api_key, get_all_configured_providers
+    from config_manager import (
+        load_config, get_ollama_models, has_api_key,
+        get_all_configured_providers, get_chatterbox_voices,
+    )
 
     el = state.get_element(element_id)
     if not el:
@@ -273,6 +276,7 @@ def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict =
         **el.get("props", {}),
         "config": config,
         "models": get_ollama_models(),
+        "chatterbox_voices": get_chatterbox_voices(),
         "has_api_key": has_api_key(provider),
         # En "har API-nyckel?"-flagga per provider som faktiskt
         # används just nu (huvud-AI:n + varje underagent som fått en
@@ -295,14 +299,18 @@ def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict =
 
 
 def _handle_config_toggle(window_id: str, element_id: str, config_path: str):
+    import time
     from config_manager import get_config_value, set_config_value
 
     current = bool(get_config_value(config_path, False))
     set_config_value(config_path, not current)
-    _rerender_config_widget(window_id, element_id)
+    _rerender_config_widget(window_id, element_id, extra_props={
+        "last_saved": {"path": config_path, "ts": time.time()},
+    })
 
 
 def _handle_config_set(window_id: str, element_id: str, config_path: str, value, numeric: bool = False):
+    import time
     from config_manager import set_config_value
 
     if numeric:
@@ -319,7 +327,7 @@ def _handle_config_set(window_id: str, element_id: str, config_path: str, value,
     # underagent) är ett tidigare "testa modell"-resultat inte längre
     # relevant - nollställ det så widgeten inte visar ett missvisande
     # gammalt resultat.
-    extra = None
+    extra = {"last_saved": {"path": config_path, "ts": time.time()}}
     is_provider_or_model = (
         config_path in ("provider", "model")
         or config_path.startswith("api_key_envs.")
@@ -329,9 +337,9 @@ def _handle_config_set(window_id: str, element_id: str, config_path: str, value,
         # agents.<key>.provider/model -> rensa bara den agentens resultat.
         if config_path.startswith("agents."):
             agent_key = config_path.split(".")[1]
-            extra = {"check_results": {**_get_check_results(window_id, element_id), agent_key: None}}
+            extra["check_results"] = {**_get_check_results(window_id, element_id), agent_key: None}
         else:
-            extra = {"check_result": None}
+            extra["check_result"] = None
 
     _rerender_config_widget(window_id, element_id, extra_props=extra)
 

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -12,7 +13,42 @@ except Exception:
     pass
 
 
-def get_ollama_models():
+def get_chatterbox_voices() -> list[str]:
+    """Listar tillgängliga röstklonings-filer i voice/voices/ (namnen
+    som chatterbox_voice i config.json/settings-widgeten kan sättas
+    till - utan .wav-ändelsen). Tom lista = bara Chatterbox
+    inbyggda default-röst går att välja."""
+    voices_dir = Path(__file__).parent / "voice" / "voices"
+    if not voices_dir.exists():
+        return []
+    return sorted(p.stem for p in voices_dir.glob("*.wav"))
+
+
+# get_ollama_models() gör ett blockerande HTTP-anrop (requests, inte
+# httpx/async) - och anropas synkront från gui_server.py:s
+# _rerender_config_widget() varje gång NÅGON toggle/textfält ändras i
+# settings-widgeten, rakt inne i den enda asyncio event-loopen som
+# hela GUI-websocketen delar på (main_gui.py). Utan cache fryser alltså
+# HELA GUI:t (alla fönster, alla widgetar) i upp till timeout-tiden
+# (3s) för varje enskild toggle-klick - det är det som känts som att
+# knapparna "ändras väldigt långsamt". 15s-cache gör att bara den
+# FÖRSTA togglen inom ett 15s-fönster betalar nätverksanropet.
+_OLLAMA_MODELS_CACHE_TTL = 15
+_ollama_models_cache: dict = {"ts": 0.0, "models": []}
+
+
+def get_ollama_models(force_refresh: bool = False):
+    now = time.monotonic()
+    if not force_refresh and (now - _ollama_models_cache["ts"]) < _OLLAMA_MODELS_CACHE_TTL:
+        return _ollama_models_cache["models"]
+
+    models = _fetch_ollama_models()
+    _ollama_models_cache["ts"] = now
+    _ollama_models_cache["models"] = models
+    return models
+
+
+def _fetch_ollama_models():
     try:
         response = requests.get(
             "http://localhost:11434/api/tags",

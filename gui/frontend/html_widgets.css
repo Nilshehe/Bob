@@ -222,7 +222,8 @@
 }
 
 /* Grupperade kort, samma mönster som iOS Settings - varje sektion är
-   ett avgränsat, avrundat "kort" istället för en platt lista. */
+   ett avgränsat, avrundat "kort" istället för en platt lista. Numera
+   hopfällbara (dropdown) - rubriken är klickbar. */
 .config-section {
   font-size: 11px;
   font-weight: 700;
@@ -231,6 +232,52 @@
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+}
+
+.config-section-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.config-section-toggle:hover {
+  opacity: 0.9;
+}
+
+.config-section-chevron {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.15s;
+  transform: rotate(0deg);
+}
+
+.config-section-toggle.open .config-section-chevron {
+  transform: rotate(90deg);
+}
+
+/* "\u2713 Sparat"-toast - dyker upp direkt under titelraden varje gång
+   backend bekräftat en config_toggle/config_text/config_number
+   (gui_server.py skickar med last_saved = {path, ts}), tonar sedan bort
+   sig själv utan att kräva någon JS-timer. */
+.config-saved-toast {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin: -8px 0 10px;
+  animation: config-toast-fade 1.8s ease forwards;
+}
+
+@keyframes config-toast-fade {
+  0% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
 }
 
 .config-group {

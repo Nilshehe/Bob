@@ -57,7 +57,26 @@ def _get_model():
         import torch
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        _model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+
+        try:
+            _model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+        except TypeError as exc:
+            # Vanligaste orsaken till "'NoneType' object is not callable"
+            # här: resemble-perth (chatterbox vattenmärkning) importerar
+            # pkg_resources, som togs bort ur setuptools i version 82+.
+            # resemble-perth sväljer det ImportError:et tyst och sätter
+            # PerthImplicitWatermarker = None, vilket kraschar först här,
+            # vid modell-laddning, med ett helt ointuitivt felmeddelande.
+            if "NoneType" in str(exc):
+                raise RuntimeError(
+                    "Chatterbox-modellen kunde inte laddas ('NoneType' "
+                    "object is not callable) - troligen för att "
+                    "resemble-perth inte kunde importera pkg_resources "
+                    "(borttaget i setuptools>=82) och tyst satte sin "
+                    "watermarker till None. Kör: "
+                    "pip install \"setuptools<81\" och försök igen."
+                ) from exc
+            raise
 
     return _model
 
@@ -105,15 +124,29 @@ def speak_sync(
     model = _get_model()
 
     voice_name = voice_name or get_config_value("chatterbox_voice")
-    language = language or get_config_value("chatterbox_language")
+    # ChatterboxMultilingualTTS.generate() har INGET default-värde för
+    # language_id (obligatorisk positional) - skickar vi inte med den
+    # kraschar anropet med "missing 1 required positional argument:
+    # 'language_id'" så fort config.json saknar "chatterbox_language".
+    # Faller tillbaka på svenska (Bobs default-språk) istället för att
+    # låta chatterbox "auto-detektera", vilket den inte stödjer.
+    language = language or get_config_value("chatterbox_language") or "sv"
 
     audio_prompt_path = _resolve_voice_path(voice_name)
 
-    kwargs = {}
-    if language:
-        kwargs["language_id"] = language
+    kwargs = {"language_id": language}
     if audio_prompt_path:
         kwargs["audio_prompt_path"] = audio_prompt_path
+    elif model.conds is None:
+        # Ingen röstfil vald och ingen inbyggd default-röst laddad -
+        # generate() skulle annars krascha på
+        # "assert self.conds is not None". Varna tydligt istället för
+        # att låta det explodera i en AssertionError utan kontext.
+        raise RuntimeError(
+            "Ingen chatterbox-röst vald och ingen default-röst hittades. "
+            "Sätt config.json: chatterbox_voice till ett filnamn i "
+            "voice/voices/ (utan .wav)."
+        )
 
     wav = model.generate(text, **kwargs)
 

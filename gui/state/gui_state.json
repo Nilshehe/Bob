@@ -20,6 +20,14 @@
       "w": 800,
       "h": 600,
       "screen": 0
+    },
+    "ba118acc": {
+      "title": "Code AI",
+      "x": 60,
+      "y": 60,
+      "w": 800,
+      "h": 600,
+      "screen": 0
     }
   },
   "elements": {
@@ -52,7 +60,7 @@
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": false
+        "value": true
       }
     },
     "code_ai_monitor": {
@@ -77,10 +85,10 @@
     "graph_85e4e7": {
       "type": "graph",
       "window_id": "main",
-      "x": 208,
+      "x": 218,
       "y": 12,
-      "w": 288,
-      "h": 183,
+      "w": 251,
+      "h": 111,
       "label": "Graf: tokens:main, tokens:code_ai",
       "visible": true,
       "props": {
@@ -915,7 +923,7 @@
     "bob_whiteboard": {
       "type": "whiteboard",
       "window_id": "01ac4572",
-      "x": 20,
+      "x": 49,
       "y": 20,
       "w": 760,
       "h": 400,
@@ -928,17 +936,18 @@
     "bob_browser": {
       "type": "html",
       "window_id": "01ac4572",
-      "x": 20,
-      "y": 440,
+      "x": 906,
+      "y": 53,
       "w": 975,
       "h": 619,
       "label": "Webbläsare",
       "visible": true,
-      "html": "<div class=\"html-c html-c-browser\"><div class=\"html-c-browser-bar\"><input class=\"html-c-browser-url\" value=\"https://se.pinterest.com/\" data-bob-action=\"browser_navigate\"></div><iframe class=\"html-c-browser-frame\" src=\"https://se.pinterest.com/\" sandbox=\"allow-scripts allow-same-origin allow-forms allow-popups\"></iframe><div class=\"html-c-browser-hint\">Visar inte sidan? Vissa sajter tillåter inte inbäddning (X-Frame-Options/CSP).</div></div>",
+      "html": "<div class=\"html-c html-c-browser\"><div class=\"html-c-browser-bar\"><input class=\"html-c-browser-url\" value=\"https://slowroads.io\" data-bob-action=\"browser_navigate\"></div><iframe class=\"html-c-browser-frame\" src=\"https://slowroads.io\" sandbox=\"allow-scripts allow-same-origin allow-forms allow-popups\"></iframe><div class=\"html-c-browser-hint\">Visar inte sidan? Vissa sajter tillåter inte inbäddning (X-Frame-Options/CSP).</div></div>",
       "component": "browser",
       "props": {
         "show_address_bar": true,
-        "url": "https://se.pinterest.com/"
+        "url": "https://slowroads.io",
+        "src": "https://www.example.com"
       }
     },
     "cat_image_1": {
@@ -949,7 +958,7 @@
       "w": 760,
       "h": 400,
       "label": "Kattbild 1",
-      "visible": true,
+      "visible": false,
       "html": "<img class=\"html-c html-c-image\" src=\"https://images.unsplash.com/photo-1589478949916-4c4c2f2c07b2?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY0MA&amp;ixlib=rb-4.0.3&amp;q=80&amp;w=1080\" alt=\"\" style=\"object-fit:cover\">",
       "component": "image",
       "props": {
@@ -959,25 +968,67 @@
     "cat_image_2": {
       "type": "html",
       "window_id": "01ac4572",
-      "x": 1330,
-      "y": 295,
+      "x": 1189,
+      "y": 280,
       "w": 760,
       "h": 400,
       "label": "Kattbild 2",
-      "visible": true,
+      "visible": false,
       "html": "<img class=\"html-c html-c-image\" src=\"https://images.unsplash.com/photo-1568541515257-7e5e4b3b8f4a?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY2MA&amp;ixlib=rb-4.0.3&amp;q=80&amp;w=1080\" alt=\"\" style=\"object-fit:cover\">",
       "component": "image",
       "props": {
         "src": "https://images.unsplash.com/photo-1568541515257-7e5e4b3b8f4a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY2MA&ixlib=rb-4.0.3&q=80&w=1080"
       }
     },
-    "config_4f60a4": {
+    "image_bd1717": {
+      "type": "html",
+      "window_id": "01ac4572",
+      "x": 78,
+      "y": 459,
+      "w": 278,
+      "h": 217,
+      "label": "Kattbild",
+      "visible": false,
+      "html": "<img class=\"html-c html-c-image\" src=\"https://placekitten.com/400/300\" alt=\"\" style=\"object-fit:cover\">",
+      "component": "image",
+      "props": {
+        "src": "https://placekitten.com/400/300"
+      }
+    },
+    "cat_img_manual": {
+      "type": "html",
+      "window_id": "01ac4572",
+      "x": 20,
+      "y": 700,
+      "w": 400,
+      "h": 200,
+      "label": "Kattbild",
+      "visible": false,
+      "html": "<img src=\"https://placekitten.com/400/300\" style=\"width: 100%; height: auto\" alt=\"Kattbild\" />",
+      "props": {
+        "raw": false
+      }
+    },
+    "whiteboard1": {
+      "type": "whiteboard",
+      "window_id": "main_window",
+      "x": 50,
+      "y": 50,
+      "w": 600,
+      "h": 400,
+      "label": "Min Whiteboard",
+      "visible": true,
+      "props": {
+        "text": "Starttext"
+      }
+    },
+    "settings_widget": {
       "type": "config_widget",
-      "window_id": "38c29d3b",
-      "x": 607,
-      "y": 280,
-      "w": 437,
-      "h": 613,
+      "window_id": "main_window",
+      "x": 10,
+      "y": 10,
+      "w": 300,
+      "h": 400,
       "label": "Bob Configuration",
       "visible": true,
       "props": {
@@ -1038,6 +1089,8 @@
           "TALKING": true,
           "VOICE_MODE": false,
           "tts_engine": "chatterbox",
+          "chatterbox_language": "sv",
+          "chatterbox_voice": "Nils_voice",
           "agents": {
             "approval": {
               "model": "gpt-oss:20b-cloud"
@@ -1068,17 +1121,50 @@
           "mxbai-embed-large:latest",
           "qwen3:1.7b"
         ],
+        "chatterbox_voices": [
+          "Nils_voice"
+        ],
         "has_api_key": false,
         "has_api_key_by_provider": {
           "ollama": false
         }
       }
+    },
+    "browser_main": {
+      "type": "html",
+      "window_id": "main_window",
+      "x": 200,
+      "y": 50,
+      "w": 700,
+      "h": 500,
+      "label": "Browser",
+      "visible": true,
+      "html": "<div class=\"html-c html-c-browser\"><iframe class=\"html-c-browser-frame\" src=\"https://www.google.com\" sandbox=\"allow-scripts allow-same-origin allow-forms allow-popups\"></iframe><div class=\"html-c-browser-hint\">Visar inte sidan? Vissa sajter tillåter inte inbäddning (X-Frame-Options/CSP).</div></div>",
+      "component": "browser",
+      "props": {
+        "url": "https://www.google.com"
+      }
+    },
+    "browser_code_ai": {
+      "type": "html",
+      "window_id": "ba118acc",
+      "x": 0,
+      "y": 0,
+      "w": 800,
+      "h": 600,
+      "label": "Code AI Browser",
+      "visible": true,
+      "html": "<div class=\"html-c html-c-browser\"><iframe class=\"html-c-browser-frame\" src=\"https://www.google.com\" sandbox=\"allow-scripts allow-same-origin allow-forms allow-popups\"></iframe><div class=\"html-c-browser-hint\">Visar inte sidan? Vissa sajter tillåter inte inbäddning (X-Frame-Options/CSP).</div></div>",
+      "component": "browser",
+      "props": {
+        "url": "https://www.google.com"
+      }
     }
   },
   "stream_panel": {
     "visible": true,
-    "x": 1388,
-    "y": 57,
+    "x": 1295,
+    "y": 213,
     "w": 434,
     "h": 510,
     "filters": {

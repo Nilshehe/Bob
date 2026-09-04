@@ -53,8 +53,10 @@
         "restore_from_backup": true
     },
     "TALKING": true,
-    "VOICE_MODE": false,
+    "VOICE_MODE": true,
     "tts_engine": "chatterbox",
+    "chatterbox_language": "sv",
+    "chatterbox_voice": "Nils_voice",
     "agents": {
         "approval": {
             "model": "gpt-oss:20b-cloud"

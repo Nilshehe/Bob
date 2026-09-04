@@ -381,7 +381,7 @@ function createElementDom(
 // ---------------------------------------------------------------------
 const CONFIG_AUTO_EXCLUDED = new Set([
   "tools", "interupt_tools", "provider", "model", "api_key_envs",
-  "agents", "tts_engine",
+  "agents", "tts_engine", "chatterbox_voice", "chatterbox_language",
 ]);
 
 const CONFIG_PROVIDERS = {
@@ -396,6 +396,33 @@ const CONFIG_PROVIDERS = {
   openrouter: "OpenRouter",
 };
 
+// Chatterbox stödjer dessa språkkoder (voice/tts_chatterbox.py:
+// SUPPORTED_LANGUAGES) - dubblerad här som {kod: visningsnamn} eftersom
+// frontend inte kan importera från Python-filen.
+const CHATTERBOX_LANGUAGES = {
+  sv: "Svenska", en: "Engelska", de: "Tyska", es: "Spanska",
+  fr: "Franska", it: "Italienska", nl: "Nederländska", pl: "Polska",
+  pt: "Portugisiska", ru: "Ryska", tr: "Turkiska", ar: "Arabiska",
+  da: "Danska", el: "Grekiska", fi: "Finska", he: "Hebreiska",
+  hi: "Hindi", ja: "Japanska", ko: "Koreanska", ms: "Malajiska",
+  no: "Norska", sw: "Swahili", zh: "Kinesiska",
+};
+
+// Kommer ihåg vilka sektioner (kort) som är utfällda per settings-
+// widget-id och sektionsnamn - annars skulle EN toggle-klick (som
+// bygger om hela widgeten från scratch, se renderConfigWidget) stänga
+// ihop alla kort igen varje gång. Persisterar bara för sessionen
+// (modul-scope, inte config.json) - det är UI-tillstånd, inte data.
+const CONFIG_SECTION_OPEN = new Map();
+
+function isConfigSectionOpen(widgetId, title) {
+  return CONFIG_SECTION_OPEN.get(widgetId + ":" + title) === true;
+}
+
+function setConfigSectionOpen(widgetId, title, open) {
+  CONFIG_SECTION_OPEN.set(widgetId + ":" + title, open);
+}
+
 function renderConfigWidget(body, props, id) {
   body.innerHTML = "";
   body.classList.add("config-widget-body");
@@ -403,12 +430,14 @@ function renderConfigWidget(body, props, id) {
   const p = props || {};
   const config = p.config || {};
   const models = p.models || [];
+  const chatterboxVoices = p.chatterbox_voices || [];
   const checkResult = p.check_result || null;
   // check_results: {main: {...}, approval: {...}, edit_ai: {...}, ...}
   // - separat från gamla check_result (main-modellen), så varje
   // agents "testa modell"-knapp visar sitt eget resultat.
   const checkResults = p.check_results || {};
   const agents = config.agents || {};
+  const lastSaved = p.last_saved || null;
 
   const root = document.createElement("div");
   root.className = "config-widget";
@@ -418,6 +447,22 @@ function renderConfigWidget(body, props, id) {
   const titleText = document.createElement("span");
   titleText.textContent = "BOB CONFIGURATION";
   title.appendChild(titleText);
+
+  // "Sparat"-bekräftelse - dyker upp direkt efter en ändring (backend
+  // skickar last_saved = {path, ts} på varje config_toggle/config_text/
+  // config_number) och tonar bort sig själv via CSS-animationen
+  // config-toast-fade. Utan den här gick det inte att se om en ändring
+  // faktiskt slagit igenom, bara att widgeten byggdes om.
+  if (lastSaved && lastSaved.ts) {
+    const toast = document.createElement("div");
+    toast.className = "config-saved-toast";
+    toast.textContent = "\u2713 Sparat";
+    // Ny animation varje gång, även om texten/klassen är samma som
+    // förra gången - annars spelar CSS-animationen inte om.
+    toast.style.animation = "none";
+    root.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.animation = ""; });
+  }
 
   const closeBtn = document.createElement("button");
   closeBtn.className = "config-close-btn";
@@ -431,21 +476,41 @@ function renderConfigWidget(body, props, id) {
 
   root.appendChild(title);
 
-  // Grupperade "kort" (iOS Settings-mönster) - varje addSection()
-  // öppnar ett nytt kort och alla rader efter den (addToggle/
-  // addTextInput/manuellt tillagda rader) landar i det kortet tills
-  // nästa addSection() anropas.
+  // Grupperade "kort" (iOS Settings-mönster), nu hopfällbara som
+  // dropdown-listor - varje addSection() öppnar ett nytt kort och alla
+  // rader efter den (addToggle/addTextInput/manuellt tillagda rader)
+  // landar i det kortet tills nästa addSection() anropas. Rubriken är
+  // klickbar och togglar om kortet (config-group) visas eller inte.
   let currentGroup = root;
 
   function addSection(text) {
+    const isOpen = isConfigSectionOpen(id, text);
+
     const section = document.createElement("div");
-    section.className = "config-section";
-    section.textContent = text;
+    section.className = "config-section config-section-toggle" + (isOpen ? " open" : "");
+
+    const chevron = document.createElement("span");
+    chevron.className = "config-section-chevron";
+    chevron.textContent = "\u25B8"; // ▸, roteras till ▾ via CSS när .open
+
+    const label = document.createElement("span");
+    label.textContent = text;
+
+    section.appendChild(chevron);
+    section.appendChild(label);
     root.appendChild(section);
 
     currentGroup = document.createElement("div");
     currentGroup.className = "config-group";
+    if (!isOpen) currentGroup.style.display = "none";
     root.appendChild(currentGroup);
+
+    section.addEventListener("click", () => {
+      const nowOpen = !section.classList.contains("open");
+      section.classList.toggle("open", nowOpen);
+      currentGroup.style.display = nowOpen ? "" : "none";
+      setConfigSectionOpen(id, text, nowOpen);
+    });
 
     return currentGroup;
   }
@@ -479,7 +544,15 @@ function renderConfigWidget(body, props, id) {
     toggle.appendChild(knob);
 
     toggle.addEventListener("click", () => {
-      sendConfigEvent("config_toggle", { config_path: path, value: !value });
+      // Optimistisk UI: flippa direkt istället för att vänta på
+      // serverns update_element-svar (som annars gör togglen kännas
+      // trögflutten så fort websocket-rundturen tar mer än ett par ms).
+      // Kommer alltid att skrivas över av den riktiga renderConfigWidget-
+      // renderingen när svaret kommer, så den blir aldrig fel "på riktigt".
+      const next = !toggle.classList.contains("on");
+      toggle.classList.toggle("on", next);
+      toggle.classList.toggle("off", !next);
+      sendConfigEvent("config_toggle", { config_path: path, value: next });
     });
 
     row.appendChild(text);
@@ -700,6 +773,67 @@ function renderConfigWidget(body, props, id) {
     row.appendChild(label);
     row.appendChild(select);
     currentGroup.appendChild(row);
+
+    // Röst + språk är bara relevanta för Chatterbox - Piper har en
+    // enda inbyggd svensk röst (voice/tts.py: MODEL = "sv_SE-nst-
+    // medium.onnx") och tar inget val.
+    if (currentEngine === "chatterbox") {
+      const voiceRow = document.createElement("div");
+      voiceRow.className = "config-row";
+      const voiceLabel = document.createElement("span");
+      voiceLabel.textContent = "Röst";
+      const voiceSelect = document.createElement("select");
+      voiceSelect.className = "config-input";
+
+      const defaultOpt = document.createElement("option");
+      defaultOpt.value = "";
+      defaultOpt.textContent = "(Chatterbox default-röst)";
+      if (!config.chatterbox_voice) defaultOpt.selected = true;
+      voiceSelect.appendChild(defaultOpt);
+
+      chatterboxVoices.forEach((name) => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        if (name === config.chatterbox_voice) option.selected = true;
+        voiceSelect.appendChild(option);
+      });
+
+      voiceSelect.addEventListener("change", () => {
+        sendConfigEvent("config_text", { config_path: "chatterbox_voice", value: voiceSelect.value });
+      });
+      voiceRow.appendChild(voiceLabel);
+      voiceRow.appendChild(voiceSelect);
+      currentGroup.appendChild(voiceRow);
+
+      if (!chatterboxVoices.length) {
+        const hint = document.createElement("div");
+        hint.className = "config-hint missing";
+        hint.textContent = "Inga röstfiler i voice/voices/ - lägg dit en .wav (5-15 sek) för röstkloning.";
+        currentGroup.appendChild(hint);
+      }
+
+      const langRow = document.createElement("div");
+      langRow.className = "config-row";
+      const langLabel = document.createElement("span");
+      langLabel.textContent = "Språk";
+      const langSelect = document.createElement("select");
+      langSelect.className = "config-input";
+      const currentLang = config.chatterbox_language || "sv";
+      Object.entries(CHATTERBOX_LANGUAGES).forEach(([code, name]) => {
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = name;
+        if (code === currentLang) option.selected = true;
+        langSelect.appendChild(option);
+      });
+      langSelect.addEventListener("change", () => {
+        sendConfigEvent("config_text", { config_path: "chatterbox_language", value: langSelect.value });
+      });
+      langRow.appendChild(langLabel);
+      langRow.appendChild(langSelect);
+      currentGroup.appendChild(langRow);
+    }
   }
 
   // --- MODEL (huvud-AI:n) ---

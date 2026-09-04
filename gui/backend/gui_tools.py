@@ -101,6 +101,24 @@ def _send_create_element(window_id, element_id):
     )
 
 
+def _send_update_element(window_id, element_id):
+    """
+    Skicka en uppdatering av ett redan skapat element (props/w/h/label)
+    till ett fönster - t.ex. när create_config_widget återanvänder en
+    redan öppen settings-widget istället för att skapa en ny.
+    """
+
+    payload = {
+        "type": "update_element",
+        **_element_payload(element_id),
+    }
+
+    gui_server.manager.send(
+        window_id,
+        payload,
+    )
+
+
 def _normalize_model_path(model_path):
     """
     Gör modellvägar enkla för Bob.
@@ -193,6 +211,12 @@ def create_config_widget(
     move_settings_widget/remove_settings_widget för att slippa hålla
     reda på dess element_id själv.
 
+    Om fönstret redan har en öppen settings-widget återanvänds den
+    (position/storlek och config-innehåll uppdateras, ingen ny widget
+    skapas) - annars skapas en ny som förr. Det förhindrar att flera
+    settings-widgetar staplas ovanpå varandra på samma default-position
+    så att bara den senast skapade syns/går att klicka på.
+
     Args:
         window_id: Fönstret där widgeten ska placeras.
         x: X-position.
@@ -201,12 +225,22 @@ def create_config_widget(
         h: Höjd.
         element_id: Valfritt element-id.
     """
-    from config_manager import load_config, get_ollama_models, has_api_key, get_all_configured_providers
+    from config_manager import (
+        load_config, get_ollama_models, has_api_key,
+        get_all_configured_providers, get_chatterbox_voices,
+    )
 
     config = load_config()
     models = get_ollama_models()
     provider = config.get("provider", "ollama")
 
+    # Återanvänd en redan öppen settings-widget i samma fönster istället
+    # för att stapla en ny ovanpå den (annars visas/nås bara den senast
+    # skapade - se _find_config_widgets).
+    existing = _find_config_widgets(window_id)
+    reused = bool(existing) and element_id is None
+    if existing and element_id is None:
+        element_id = existing[0]["element_id"]
     element_id = (
         element_id
         or f"config_{uuid.uuid4().hex[:6]}"
@@ -225,6 +259,7 @@ def create_config_widget(
         props={
             "config": config,
             "models": models,
+            "chatterbox_voices": get_chatterbox_voices(),
             "has_api_key": has_api_key(provider),
             "has_api_key_by_provider": {
                 p: has_api_key(p) for p in get_all_configured_providers()
@@ -232,14 +267,18 @@ def create_config_widget(
         }
     )
 
-    _send_create_element(
-        window_id,
-        element_id,
-    )
+    if reused:
+        _send_update_element(window_id, element_id)
+    else:
+        _send_create_element(
+            window_id,
+            element_id,
+        )
 
     return {
         "ok": True,
         "element_id": element_id,
+        "reused_existing": reused,
     }
 
 
