@@ -286,8 +286,6 @@ RESEARCH_TOOLS = [
 # Research LLM + agent
 # ---------------------------------------------------------------------------
 
-_research_llm = ChatOllama(model=RESEARCH_MODEL)
-
 SYSTEM_PROMPT = """
 You are an autonomous research agent.
 
@@ -346,11 +344,26 @@ When the research is complete, provide the user with a brief but informative
 final answer. The full research should be saved in `ai_workspace/research`.
 """
 
-_research_agent = create_agent(
-    model=_research_llm,
-    system_prompt=SYSTEM_PROMPT,
-    tools=RESEARCH_TOOLS,
-)
+def _build_research_agent():
+    import config_manager
+    settings = config_manager.get_agent_settings("research_ai", RESEARCH_MODEL)
+    llm = config_manager.make_chat_model(settings["provider"], settings["model"])
+    return llm, create_agent(
+        model=llm,
+        system_prompt=SYSTEM_PROMPT,
+        tools=RESEARCH_TOOLS,
+    )
+
+
+def reload_research_agent():
+    """Bygger om Research AI:s modell/agent från config.json
+    (agents.research_ai) - anropas från main.py:s reload_agent()."""
+    global _research_llm, _research_agent
+    _research_llm, _research_agent = _build_research_agent()
+    return {"ok": True}
+
+
+_research_llm, _research_agent = _build_research_agent()
 
 
 # ---------------------------------------------------------------------------

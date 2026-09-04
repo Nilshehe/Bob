@@ -159,6 +159,74 @@ def get_provider() -> str:
     return get_config_value("provider", "ollama") or "ollama"
 
 
+# ---------------------------------------------------------------------
+# Per-agent AI (Approval AI, Edit AI, Research AI, Code AI)
+# ---------------------------------------------------------------------
+# Varje underagent kan köra en egen provider/modell, oberoende av
+# huvud-AI:n (config.json: agents.<agent_key>.provider/model). Tomt
+# fält/saknad nyckel = ärver huvud-AI:ns provider, och underagentens
+# egna default_model (t.ex. "qwen3:4b") om inget annat är satt.
+# Settings-widgeten (config_widget) läser/skriver de här via
+# config_path "agents.<agent_key>.provider" / ".model".
+
+AGENT_KEYS = ("approval", "edit_ai", "research_ai", "code_ai")
+
+
+def get_agent_settings(agent_key: str, default_model: str) -> dict:
+    """Returnerar {"provider", "model"} för en underagent, med fallback
+    till huvud-AI:ns provider och till `default_model`."""
+    config = load_config()
+    agent_cfg = (config.get("agents") or {}).get(agent_key) or {}
+
+    provider = agent_cfg.get("provider") or config.get("provider", "ollama") or "ollama"
+    model = agent_cfg.get("model") or default_model
+
+    return {"provider": provider, "model": model}
+
+
+def get_all_configured_providers() -> set:
+    """Alla providers som faktiskt används just nu - huvud-AI:n plus
+    varje underagent som fått en egen provider satt. Används för att
+    visa "har API-nyckel?" per provider i settings-widgeten."""
+    config = load_config()
+    providers = {config.get("provider", "ollama") or "ollama"}
+    for agent_cfg in (config.get("agents") or {}).values():
+        if isinstance(agent_cfg, dict) and agent_cfg.get("provider"):
+            providers.add(agent_cfg["provider"])
+    return providers
+
+
+def make_chat_model(provider: str, model: str, temperature: float = 0.7, **extra):
+    """Bygger en langchain chat-modell för valfri provider - samma
+    logik som main.py:s make_agent() använde tidigare (bara för
+    huvud-AI:n), nu delad så Approval/Edit/Research/Code AI kan
+    använda vilken provider de vill, inte bara Ollama."""
+    if provider == "ollama":
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=model,
+            temperature=temperature,
+            **extra,
+        )
+
+    from langchain.chat_models import init_chat_model
+
+    api_key = os.environ.get(get_api_key_env_name(provider))
+
+    # num_ctx/num_predict/reasoning m.m. är Ollama-specifika kwargs -
+    # skicka bara med det API-providers faktiskt förstår.
+    extra = {k: v for k, v in extra.items() if k in ("max_tokens",)}
+
+    return init_chat_model(
+        model,
+        model_provider=provider,
+        temperature=temperature,
+        api_key=api_key,
+        **extra,
+    )
+
+
 def get_api_key_env_name(provider: str) -> str:
     """Namnet på den .env-variabel som ska innehålla API-nyckeln för
     `provider`. Användaren kan döpa om den fritt via settings-widgeten

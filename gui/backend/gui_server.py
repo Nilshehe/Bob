@@ -260,7 +260,7 @@ def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict =
     och skickar de nya props:en till settings-widgeten. Widgeten byggs
     helt av frontend-JS utifrån props (se app.js: renderConfigWidget) -
     det finns ingen server-renderad HTML att uppdatera här, bara props."""
-    from config_manager import load_config, get_ollama_models, has_api_key
+    from config_manager import load_config, get_ollama_models, has_api_key, get_all_configured_providers
 
     el = state.get_element(element_id)
     if not el:
@@ -274,6 +274,14 @@ def _rerender_config_widget(window_id: str, element_id: str, extra_props: dict =
         "config": config,
         "models": get_ollama_models(),
         "has_api_key": has_api_key(provider),
+        # En "har API-nyckel?"-flagga per provider som faktiskt
+        # används just nu (huvud-AI:n + varje underagent som fått en
+        # egen provider) - Approval/Edit/Research/Code AI kan köra en
+        # annan provider än huvud-AI:n, så en enda global has_api_key
+        # räcker inte längre.
+        "has_api_key_by_provider": {
+            p: has_api_key(p) for p in get_all_configured_providers()
+        },
     }
     if extra_props:
         props.update(extra_props)
@@ -307,26 +315,74 @@ def _handle_config_set(window_id: str, element_id: str, config_path: str, value,
 
     set_config_value(config_path, value)
 
-    # Byter man provider/modell/API-nyckelvariabel är ett tidigare
-    # "testa modell"-resultat inte längre relevant - nollställ det så
-    # widgeten inte visar ett missvisande gammalt resultat.
+    # Byter man provider/modell/API-nyckelvariabel (huvud-AI:n eller en
+    # underagent) är ett tidigare "testa modell"-resultat inte längre
+    # relevant - nollställ det så widgeten inte visar ett missvisande
+    # gammalt resultat.
     extra = None
-    if config_path == "provider" or config_path == "model" or config_path.startswith("api_key_envs."):
-        extra = {"check_result": None}
+    is_provider_or_model = (
+        config_path in ("provider", "model")
+        or config_path.startswith("api_key_envs.")
+        or config_path.startswith("agents.") and config_path.rsplit(".", 1)[-1] in ("provider", "model")
+    )
+    if is_provider_or_model:
+        # agents.<key>.provider/model -> rensa bara den agentens resultat.
+        if config_path.startswith("agents."):
+            agent_key = config_path.split(".")[1]
+            extra = {"check_results": {**_get_check_results(window_id, element_id), agent_key: None}}
+        else:
+            extra = {"check_result": None}
 
     _rerender_config_widget(window_id, element_id, extra_props=extra)
 
 
-def _handle_config_check_model(window_id: str, element_id: str):
-    from config_manager import load_config, check_model
+def _get_check_results(window_id: str, element_id: str) -> dict:
+    el = state.get_element(element_id)
+    return dict((el or {}).get("props", {}).get("check_results") or {})
+
+
+def _handle_config_check_model(window_id: str, element_id: str, agent: str = None):
+    from config_manager import load_config, check_model, get_agent_settings, AGENT_KEYS
 
     config = load_config()
-    provider = config.get("provider", "ollama")
-    model = config.get("model", "")
-    result = check_model(provider, model)
 
-    _rerender_config_widget(window_id, element_id, extra_props={
-        "check_result": {"provider": provider, "model": model, **result},
+    if agent and agent != "main" and agent in AGENT_KEYS:
+        default_models = {
+            "approval": "qwen3:4b",
+            "edit_ai": "qwen3:4b",
+            "research_ai": "qwen3:4b",
+            "code_ai": "qwen3:4b",
+        }
+        settings = get_agent_settings(agent, default_models.get(agent, "qwen3:4b"))
+        provider, model = settings["provider"], settings["model"]
+    else:
+        agent = "main"
+        provider = config.get("provider", "ollama")
+        model = config.get("model", "")
+
+    result = check_model(provider, model)
+    result_entry = {"provider": provider, "model": model, **result}
+
+    check_results = _get_check_results(window_id, element_id)
+    check_results[agent] = result_entry
+
+    extra = {"check_results": check_results}
+    if agent == "main":
+        extra["check_result"] = result_entry
+
+    _rerender_config_widget(window_id, element_id, extra_props=extra)
+
+
+def _handle_config_close(window_id: str, element_id: str):
+    """Stänger settings-widgeten direkt från GUI:t (X-knappen), utan att
+    Bob behöver anropa remove_element själv."""
+    if not element_id:
+        return
+    state.remove_element(element_id)
+    manager.send(window_id, {
+        "type": "remove_element",
+        "element_id": element_id,
+        "permanent": True,
     })
 
 
@@ -355,17 +411,21 @@ def _handle_html_action(window_id: str, msg: dict):
         return
 
     if action == "config_provider":
-        _handle_config_set(window_id, element_id, "provider", value)
+        _handle_config_set(window_id, element_id, config_path or "provider", value)
         return
 
     if action == "config_model":
         model = msg.get("model") or value
-        if model:
-            _handle_config_set(window_id, element_id, "model", model)
+        if model is not None:
+            _handle_config_set(window_id, element_id, config_path or "model", model)
         return
 
     if action == "config_check_model":
-        _handle_config_check_model(window_id, element_id)
+        _handle_config_check_model(window_id, element_id, agent=msg.get("agent"))
+        return
+
+    if action == "config_close":
+        _handle_config_close(window_id, element_id)
         return
 
     if action == "config_restart":

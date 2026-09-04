@@ -12,6 +12,14 @@
       "w": 800,
       "h": 600,
       "screen": 0
+    },
+    "01ac4572": {
+      "title": "Bob Whiteboard & Browser",
+      "x": 60,
+      "y": 60,
+      "w": 800,
+      "h": 600,
+      "screen": 0
     }
   },
   "elements": {
@@ -836,15 +844,15 @@
     "toggle_259d11": {
       "type": "toggle",
       "window_id": "main",
-      "x": 22,
-      "y": 109,
+      "x": 23,
+      "y": 107,
       "w": 177,
       "h": 89,
       "label": "Talking",
       "visible": true,
       "props": {
         "variable": "Talking",
-        "value": false
+        "value": true
       }
     },
     "agent_monitor_1fa77d": {
@@ -904,18 +912,77 @@
         "step": 0
       }
     },
-    "config_aa7015": {
+    "bob_whiteboard": {
+      "type": "whiteboard",
+      "window_id": "01ac4572",
+      "x": 20,
+      "y": 20,
+      "w": 760,
+      "h": 400,
+      "label": "Whiteboard",
+      "visible": true,
+      "props": {
+        "text": "Bild visar widgeten funkar inte fixa jag vill att modell provider ska finna nvidia vara ett alternativ och jag vill att bob config saken som han borde hitta nån stans i gui folder ska kunna stängas av / på ge mig en monitor på edit ai också"
+      }
+    },
+    "bob_browser": {
+      "type": "html",
+      "window_id": "01ac4572",
+      "x": 20,
+      "y": 440,
+      "w": 975,
+      "h": 619,
+      "label": "Webbläsare",
+      "visible": true,
+      "html": "<div class=\"html-c html-c-browser\"><div class=\"html-c-browser-bar\"><input class=\"html-c-browser-url\" value=\"https://se.pinterest.com/\" data-bob-action=\"browser_navigate\"></div><iframe class=\"html-c-browser-frame\" src=\"https://se.pinterest.com/\" sandbox=\"allow-scripts allow-same-origin allow-forms allow-popups\"></iframe><div class=\"html-c-browser-hint\">Visar inte sidan? Vissa sajter tillåter inte inbäddning (X-Frame-Options/CSP).</div></div>",
+      "component": "browser",
+      "props": {
+        "show_address_bar": true,
+        "url": "https://se.pinterest.com/"
+      }
+    },
+    "cat_image_1": {
+      "type": "html",
+      "window_id": "01ac4572",
+      "x": 1340,
+      "y": 706,
+      "w": 760,
+      "h": 400,
+      "label": "Kattbild 1",
+      "visible": true,
+      "html": "<img class=\"html-c html-c-image\" src=\"https://images.unsplash.com/photo-1589478949916-4c4c2f2c07b2?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY0MA&amp;ixlib=rb-4.0.3&amp;q=80&amp;w=1080\" alt=\"\" style=\"object-fit:cover\">",
+      "component": "image",
+      "props": {
+        "src": "https://images.unsplash.com/photo-1589478949916-4c4c2f2c07b2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY0MA&ixlib=rb-4.0.3&q=80&w=1080"
+      }
+    },
+    "cat_image_2": {
+      "type": "html",
+      "window_id": "01ac4572",
+      "x": 1330,
+      "y": 295,
+      "w": 760,
+      "h": 400,
+      "label": "Kattbild 2",
+      "visible": true,
+      "html": "<img class=\"html-c html-c-image\" src=\"https://images.unsplash.com/photo-1568541515257-7e5e4b3b8f4a?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY2MA&amp;ixlib=rb-4.0.3&amp;q=80&amp;w=1080\" alt=\"\" style=\"object-fit:cover\">",
+      "component": "image",
+      "props": {
+        "src": "https://images.unsplash.com/photo-1568541515257-7e5e4b3b8f4a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzOTY2ODR8MHwxfGFsbHwxfHx8fHx8fHwxNjg4Njg1NDY2MA&ixlib=rb-4.0.3&q=80&w=1080"
+      }
+    },
+    "config_4f60a4": {
       "type": "config_widget",
-      "window_id": "settings",
-      "x": 50,
-      "y": 50,
-      "w": 300,
-      "h": 200,
+      "window_id": "38c29d3b",
+      "x": 607,
+      "y": 280,
+      "w": 437,
+      "h": 613,
       "label": "Bob Configuration",
       "visible": true,
       "props": {
         "config": {
-          "model": "qwen3:4b",
+          "model": "gpt-oss:20b-cloud",
           "temperature": 0.7,
           "num_ctx": 8192,
           "num_predict": 8192,
@@ -969,145 +1036,16 @@
             "restore_from_backup": true
           },
           "TALKING": true,
-          "VOICE_MODE": true
-        }
-      }
-    },
-    "config_7080df": {
-      "type": "config_widget",
-      "window_id": "main",
-      "x": 587,
-      "y": -36,
-      "w": 357,
-      "h": 84,
-      "label": "Bob Configuration",
-      "visible": true,
-      "props": {
-        "config": {
-          "model": "qwen3:4b",
-          "temperature": 0.7,
-          "num_ctx": 8192,
-          "num_predict": 8192,
-          "tools": {
-            "copy_to_clipboard": true,
-            "web_search": true,
-            "search_visible_webpage": true,
-            "download_file": true,
-            "move_file": true,
-            "get_clickable_elements": true,
-            "click_on_page": true,
-            "type_into_page": true,
-            "scroll_page": true,
-            "click_and_download": true,
-            "get_page_text": true,
-            "open_browser": true,
-            "code_ai": true,
-            "code_ai_status": true,
-            "research_ai": true,
-            "research_ai_status": true,
-            "shutdown_ai": true,
-            "edit_ai": true,
-            "edit_ai_status": true,
-            "apply_edit_files": true,
-            "list_apply_backups": true,
-            "restore_from_backup": true
-          },
-          "system_prompt": "You are BOB a helpful assistant. Always check if there are any available skills that can help you with the task. If there are, use them. If not, try to solve the task yourself. Always answer in Swedish. You may receive relevant long-term memories about the user. Use them when they are relevant to the current request. Do not mention the memory system unless the user asks about it. Do not assume a memory is correct if the current user message contradicts it. Allways check memory for relevant information before using tools or answering questions.",
-          "interupt_tools": {
-            "copy_to_clipboard": false,
-            "web_search": false,
-            "search_visible_webpage": false,
-            "download_file": true,
-            "move_file": true,
-            "get_clickable_elements": false,
-            "click_on_page": false,
-            "type_into_page": false,
-            "scroll_page": false,
-            "click_and_download": true,
-            "get_page_text": false,
-            "open_browser": false,
-            "code_ai": true,
-            "code_ai_status": false,
-            "research_ai": true,
-            "research_ai_status": false,
-            "shutdown_ai": false,
-            "edit_ai": true,
-            "edit_ai_status": false,
-            "apply_edit_files": true,
-            "list_apply_backups": false,
-            "restore_from_backup": true
-          },
-          "TALKING": false,
-          "VOICE_MODE": false
-        }
-      }
-    },
-    "config_9dd8f4": {
-      "type": "config_widget",
-      "window_id": "main_window",
-      "x": 0,
-      "y": 0,
-      "w": 300,
-      "h": 200,
-      "label": "Bob Configuration",
-      "visible": true,
-      "props": {
-        "config": {
-          "model": "qwen3:4b",
-          "temperature": 0.7,
-          "num_ctx": 8192,
-          "num_predict": 8192,
-          "tools": {
-            "copy_to_clipboard": true,
-            "web_search": true,
-            "search_visible_webpage": true,
-            "download_file": true,
-            "move_file": true,
-            "get_clickable_elements": true,
-            "click_on_page": true,
-            "type_into_page": true,
-            "scroll_page": true,
-            "click_and_download": true,
-            "get_page_text": true,
-            "open_browser": true,
-            "code_ai": true,
-            "code_ai_status": true,
-            "research_ai": true,
-            "research_ai_status": true,
-            "shutdown_ai": true,
-            "edit_ai": true,
-            "edit_ai_status": true,
-            "apply_edit_files": true,
-            "list_apply_backups": true,
-            "restore_from_backup": true
-          },
-          "system_prompt": "You are BOB a helpful assistant. Always check if there are any available skills that can help you with the task. If there are, use them. If not, try to solve the task yourself. Always answer in Swedish. You may receive relevant long-term memories about the user. Use them when they are relevant to the current request. Do not mention the memory system unless the user asks about it. Do not assume a memory is correct if the current user message contradicts it. Allways check memory for relevant information before using tools or answering questions.",
-          "interupt_tools": {
-            "copy_to_clipboard": false,
-            "web_search": false,
-            "search_visible_webpage": false,
-            "download_file": true,
-            "move_file": true,
-            "get_clickable_elements": false,
-            "click_on_page": false,
-            "type_into_page": false,
-            "scroll_page": false,
-            "click_and_download": true,
-            "get_page_text": false,
-            "open_browser": false,
-            "code_ai": true,
-            "code_ai_status": false,
-            "research_ai": true,
-            "research_ai_status": false,
-            "shutdown_ai": false,
-            "edit_ai": true,
-            "edit_ai_status": false,
-            "apply_edit_files": true,
-            "list_apply_backups": false,
-            "restore_from_backup": true
-          },
-          "TALKING": false,
-          "VOICE_MODE": false
+          "VOICE_MODE": false,
+          "tts_engine": "chatterbox",
+          "agents": {
+            "approval": {
+              "model": "gpt-oss:20b-cloud"
+            },
+            "code_ai": {
+              "model": "qwen3-coder:480b-cloud"
+            }
+          }
         },
         "models": [
           "embeddinggemma:latest",
@@ -1129,16 +1067,20 @@
           "nomic-embed-text:latest",
           "mxbai-embed-large:latest",
           "qwen3:1.7b"
-        ]
+        ],
+        "has_api_key": false,
+        "has_api_key_by_provider": {
+          "ollama": false
+        }
       }
     }
   },
   "stream_panel": {
     "visible": true,
-    "x": 1503,
-    "y": 13,
-    "w": 381,
-    "h": 496,
+    "x": 1388,
+    "y": 57,
+    "w": 434,
+    "h": 510,
     "filters": {
       "text": true,
       "reasoning": true,

@@ -568,13 +568,26 @@ WORKFLOW:
 Only touch files that are actually relevant to the task. Do not rewrite
 files you have not read first."""
 
-_edit_llm = ChatOllama(model=EDIT_MODEL)
+def _build_edit_agent():
+    import config_manager
+    settings = config_manager.get_agent_settings("edit_ai", EDIT_MODEL)
+    llm = config_manager.make_chat_model(settings["provider"], settings["model"])
+    return llm, create_agent(
+        model=llm,
+        system_prompt=SYSTEM_PROMPT,
+        tools=EDIT_TOOLS,
+    )
 
-_edit_agent = create_agent(
-    model=_edit_llm,
-    system_prompt=SYSTEM_PROMPT,
-    tools=EDIT_TOOLS,
-)
+
+def reload_edit_agent():
+    """Bygger om Edit AI:s modell/agent från config.json (agents.edit_ai)
+    - anropas från main.py:s reload_agent() vid "Apply & Restart"."""
+    global _edit_llm, _edit_agent
+    _edit_llm, _edit_agent = _build_edit_agent()
+    return {"ok": True}
+
+
+_edit_llm, _edit_agent = _build_edit_agent()
 
 
 # ---------------------------------------------------------------------------

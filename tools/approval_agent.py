@@ -1,20 +1,21 @@
+import asyncio
 import uuid
 from typing import Any, Callable
 
 import gui.backend.gui_server as gui_server
 
 from langchain_core.tools import tool
-from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
 from langchain.messages import AIMessageChunk
 from langgraph.checkpoint.memory import InMemorySaver
 
+import config_manager
 from funktioner.response_cleaner import get_last_text
 from funktioner.formater import formater
 from voice.tts import speak
 
 
-APPROVAL_MODEL = "qwen3:4b"
+APPROVAL_MODEL = "qwen3:4b"  # default om inget annat är valt i settings (agents.approval)
 MAX_TURNS = 6
 
 
@@ -53,12 +54,37 @@ def reject(message: str) -> str:
 # ---------------------------------------------------------------------------
 # Approval AI
 # ---------------------------------------------------------------------------
+# Byggs om via reload_approval_agent() (anropas från main.py:s
+# reload_agent() när "Apply & Restart" trycks i settings-widgeten) så
+# ett providerbyte för Approval AI (config.json: agents.approval) slår
+# igenom utan att hela Bob behöver startas om.
 
-_approval_llm = ChatOllama(
-    model=APPROVAL_MODEL,
-)
-
+_approval_llm = None
+_approval_agent = None
 _approval_memory = InMemorySaver()
+
+
+def _build_approval_agent():
+    settings = config_manager.get_agent_settings("approval", APPROVAL_MODEL)
+    llm = config_manager.make_chat_model(
+        settings["provider"],
+        settings["model"],
+        temperature=0.3,
+    )
+    return llm, create_agent(
+        model=llm,
+        system_prompt=_SYSTEM_PROMPT,
+        tools=[approve, reject],
+        checkpointer=_approval_memory,
+    )
+
+
+def reload_approval_agent():
+    """Bygger om Approval AI:s modell/agent från config.json (kallas
+    från main.py:s reload_agent())."""
+    global _approval_llm, _approval_agent
+    _approval_llm, _approval_agent = _build_approval_agent()
+    return {"ok": True}
 
 
 _SYSTEM_PROMPT = (
@@ -95,12 +121,9 @@ _SYSTEM_PROMPT = (
 )
 
 
-_approval_agent = create_agent(
-    model=_approval_llm,
-    system_prompt=_SYSTEM_PROMPT,
-    tools=[approve, reject],
-    checkpointer=_approval_memory,
-)
+_approval_agent = None  # byggs av reload_approval_agent() nedan, direkt vid import
+
+reload_approval_agent()
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +153,7 @@ def _broadcast_approval_stream(
 # Stream one Approval AI turn
 # ---------------------------------------------------------------------------
 
-def _stream_agent_turn(
+async def _stream_agent_turn(
     cfg: dict,
     msg: str,
 ) -> str:
@@ -144,12 +167,17 @@ def _stream_agent_turn(
     approve()/reject() are normal tools, not interrupts. Therefore we
     explicitly monitor _pending_decision and stop processing the current
     turn as soon as a decision has been made.
+
+    Uses astream() (not the blocking stream()) so this never freezes
+    the main asyncio event loop - a blocking call here previously meant
+    the bridge loop couldn't process incoming websocket messages (the
+    user's GUI reply) while Approval AI was "thinking".
     """
 
     text_parts: list[str] = []
     printed_anything = False
 
-    for block in _approval_agent.stream(
+    async for block in _approval_agent.astream(
         {
             "messages": [
                 {
@@ -262,11 +290,36 @@ def run_approval_conversation(
     tool_name: str,
     args: dict,
     reasoning: str,
-    get_user_reply: Callable[[str], str],
+    get_user_reply: Callable[[str], Any],
     TALKING: bool = False,
 ) -> dict:
     """
     Run Approval AI until it calls approve() or reject().
+
+    NOTE: this is a synchronous wrapper kept for backwards
+    compatibility (main.py's interupt_identifier() used to call this
+    directly, blocking). It now just drives the async implementation.
+    Prefer arun_approval_conversation() from async code.
+    """
+    return asyncio.run(
+        arun_approval_conversation(tool_name, args, reasoning, get_user_reply, TALKING)
+    )
+
+
+async def arun_approval_conversation(
+    tool_name: str,
+    args: dict,
+    reasoning: str,
+    get_user_reply: Callable[[str], Any],
+    TALKING: bool = False,
+) -> dict:
+    """
+    Run Approval AI until it calls approve() or reject().
+
+    `get_user_reply(ai_text)` may be a plain function OR a coroutine
+    function - both are supported, since the GUI-aware version needs
+    to `await` the event queue (see main.py:_get_user_reply) while the
+    voice-mode version blocks on the microphone in a thread.
 
     Returns:
 
@@ -308,7 +361,7 @@ def run_approval_conversation(
         # Let Approval AI respond.
         # ---------------------------------------------------------------
 
-        ai_text = _stream_agent_turn(
+        ai_text = await _stream_agent_turn(
             cfg,
             msg,
         )
@@ -341,16 +394,23 @@ def run_approval_conversation(
         # ---------------------------------------------------------------
         # No decision yet.
         #
-        # Now it is actually appropriate to listen to the user.
+        # Now it is actually appropriate to listen to the user. This
+        # awaits the event queue (or the mic thread, in voice mode) -
+        # it does NOT block the event loop, so a GUI reply sent while
+        # we're waiting here is picked up correctly (see main.py's
+        # async _get_user_reply, which pulls the next "user_message"
+        # event that arrives after the question was asked and removes
+        # it from the queue so it isn't processed twice).
         # ---------------------------------------------------------------
 
-        msg = get_user_reply(
+        reply = get_user_reply(
             ai_text or "(no reply from the agent)"
         )
+        msg = await reply if asyncio.iscoroutine(reply) else reply
 
         if TALKING and ai_text:
             try:
-                speak(ai_text)
+                await speak(ai_text)
             except Exception:
                 pass
 

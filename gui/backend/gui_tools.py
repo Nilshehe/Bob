@@ -185,8 +185,13 @@ def create_config_widget(
     installerade modeller; en API-provider ger fri text för modellnamn,
     ett fält för vilken .env-variabel som har API-nyckeln, en
     OK/saknas-indikator för den nyckeln, och en "testa om modellen
-    finns"-knapp). Apply & Restart-knappen startar om agenten med den
-    nya konfigurationen.
+    finns"-knapp), samt AI PER AGENT: Approval/Edit/Research/Code AI
+    kan var och en köras med en egen provider/modell. Apply & Restart-
+    knappen startar om agenten med den nya konfigurationen.
+
+    Widgeten är ett helt vanligt element (flyttbar/borttagbar) - använd
+    move_settings_widget/remove_settings_widget för att slippa hålla
+    reda på dess element_id själv.
 
     Args:
         window_id: Fönstret där widgeten ska placeras.
@@ -196,10 +201,11 @@ def create_config_widget(
         h: Höjd.
         element_id: Valfritt element-id.
     """
-    from config_manager import load_config, get_ollama_models, has_api_key
+    from config_manager import load_config, get_ollama_models, has_api_key, get_all_configured_providers
 
     config = load_config()
     models = get_ollama_models()
+    provider = config.get("provider", "ollama")
 
     element_id = (
         element_id
@@ -219,7 +225,10 @@ def create_config_widget(
         props={
             "config": config,
             "models": models,
-            "has_api_key": has_api_key(config.get("provider", "ollama")),
+            "has_api_key": has_api_key(provider),
+            "has_api_key_by_provider": {
+                p: has_api_key(p) for p in get_all_configured_providers()
+            },
         }
     )
 
@@ -539,6 +548,77 @@ def show_element(element_id: str) -> dict:
     return {
         "ok": True
     }
+
+
+def _find_config_widgets(window_id: Optional[str] = None) -> list[dict]:
+    """Hittar alla config_widget-element (Bobs settings-widget), i ett
+    specifikt fönster om window_id anges, annars i alla fönster."""
+    elements = (
+        state.all_elements_for_window(window_id)
+        if window_id
+        else state.all_elements()
+    )
+    return [
+        {"element_id": eid, "window_id": e.get("window_id")}
+        for eid, e in elements.items()
+        if e.get("type") == "config_widget"
+    ]
+
+
+@tool(parse_docstring=True)
+def move_settings_widget(x: int, y: int, window_id: Optional[str] = None) -> dict:
+    """Flytta Bobs settings-widget (config_widget) till en ny position,
+    utan att behöva känna till dess element_id i förväg - slår upp den
+    åt dig. Om det finns fler än en öppen (i olika fönster) måste du
+    ange window_id för att välja vilken.
+
+    Args:
+        x: Ny X-position i pixlar.
+        y: Ny Y-position i pixlar.
+        window_id: Valfritt - vilket fönsters settings-widget som ska
+            flyttas, om det finns fler än en öppen.
+    """
+    matches = _find_config_widgets(window_id)
+
+    if not matches:
+        return {"ok": False, "message": "Ingen settings-widget hittad (skapa en med create_config_widget)."}
+
+    if len(matches) > 1:
+        return {
+            "ok": False,
+            "message": "Flera settings-widgetar öppna - ange window_id.",
+            "widgets": matches,
+        }
+
+    return move_element.func(matches[0]["element_id"], x, y)
+
+
+@tool(parse_docstring=True)
+def remove_settings_widget(permanent: bool = True, window_id: Optional[str] = None) -> dict:
+    """Ta bort (eller dölj) Bobs settings-widget (config_widget), utan
+    att behöva känna till dess element_id i förväg - slår upp den åt
+    dig. Om det finns fler än en öppen (i olika fönster) måste du ange
+    window_id för att välja vilken.
+
+    Args:
+        permanent: True = radera helt (default), False = bara dölj
+            (kan visas igen med show_element).
+        window_id: Valfritt - vilket fönsters settings-widget som ska
+            tas bort, om det finns fler än en öppen.
+    """
+    matches = _find_config_widgets(window_id)
+
+    if not matches:
+        return {"ok": False, "message": "Ingen settings-widget hittad."}
+
+    if len(matches) > 1:
+        return {
+            "ok": False,
+            "message": "Flera settings-widgetar öppna - ange window_id.",
+            "widgets": matches,
+        }
+
+    return remove_element.func(matches[0]["element_id"], permanent)
 
 
 @tool(parse_docstring=True)
@@ -1071,11 +1151,15 @@ def move_window(
 
 @tool(parse_docstring=True)
 def close_window(window_id: str) -> dict:
-    """Stäng ett GUI-fönster (och de element som hör till det).
+    """Stäng ett GUI-fönster (och de element som hör till det). Säker
+    att anropa även om window_id redan är stängt/aldrig fanns - då
+    returneras bara ok=False istället för att kasta ett fel.
 
     Args:
         window_id: ID för fönstret som ska stängas.
     """
+    existed = any(w["window_id"] == window_id for w in wm.get_windows())
+
     wm.close_window(
         window_id
     )
@@ -1083,7 +1167,8 @@ def close_window(window_id: str) -> dict:
     gui_server.broadcast_windows_list()
 
     return {
-        "ok": True
+        "ok": existed,
+        "message": "Closed." if existed else f"No such window: {window_id} (already closed or never existed).",
     }
 
 
@@ -1099,6 +1184,40 @@ def list_windows() -> list:
     storlek och antal element. Använd innan element skapas/flyttas för
     att se vilka window_id som faktiskt finns."""
     return wm.get_windows()
+
+
+@tool(parse_docstring=True)
+def list_widgets(window_id: Optional[str] = None) -> list:
+    """Lista alla widgetar/element (knappar, config_widget,
+    text-paneler, 3d-modeller, etc) i ett fönster, eller i alla fönster
+    om window_id inte anges. Använd den här - inte list_windows - för
+    att se vilka faktiska widgetar som finns och deras id/typ/position,
+    t.ex. innan du flyttar, döljer eller tar bort ett element.
+
+    Args:
+        window_id: Valfritt - begränsa listan till ett specifikt
+            fönster. Utelämnas för att lista widgetar i alla fönster.
+    """
+    elements = (
+        state.all_elements_for_window(window_id)
+        if window_id
+        else state.all_elements()
+    )
+
+    return [
+        {
+            "element_id": eid,
+            "type": e.get("type"),
+            "window_id": e.get("window_id"),
+            "label": e.get("label"),
+            "x": e.get("x"),
+            "y": e.get("y"),
+            "w": e.get("w"),
+            "h": e.get("h"),
+            "visible": e.get("visible", True),
+        }
+        for eid, e in elements.items()
+    ]
 
 
 # ---------------------------------------------------------------------

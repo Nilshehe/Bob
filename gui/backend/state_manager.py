@@ -94,6 +94,11 @@ class StateManager:
     def all_elements_for_window(self, window_id: str):
         return {eid: e for eid, e in self.state["elements"].items() if e.get("window_id") == window_id}
 
+    def all_elements(self):
+        """Alla element i alla fönster, oavsett window_id. Används av
+        list_widgets() i gui_tools.py."""
+        return dict(self.state["elements"])
+
     # ---- svarswidget (stream panel) ----
     def get_stream_panel(self):
         """Returnerar aktuellt state för svarswidgeten, med fallback till

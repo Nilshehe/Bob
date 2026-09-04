@@ -163,27 +163,93 @@
 .config-widget-body {
   overflow-y: auto;
   overflow-x: hidden;
+  color: var(--bob-text, var(--holo-blue));
+  /* Holografisk scrollbar, samma mönster som #stream-body - annars
+     visas webbläsarens defaultscrollbar (fel färg mot det mörka
+     temat). */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 234, 255, 0.55) rgba(0, 234, 255, 0.04);
+}
+
+.config-widget-body::-webkit-scrollbar { width: 9px; }
+.config-widget-body::-webkit-scrollbar-track {
+  background: rgba(0, 234, 255, 0.04);
+}
+.config-widget-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 234, 255, 0.55);
+  border-radius: 6px;
+}
+.config-widget-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 234, 255, 0.8);
 }
 
 .config-widget {
   width: 100%;
   box-sizing: border-box;
   padding: 16px;
+  color: var(--bob-text, var(--holo-blue));
 }
 
 .config-title {
   font-size: 18px;
   font-weight: 700;
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
+.config-close-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 234, 255, 0.4);
+  background: rgba(0, 234, 255, 0.08);
+  color: var(--bob-text, var(--holo-blue));
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.config-close-btn:hover {
+  background: rgba(255, 77, 79, 0.25);
+  border-color: var(--bob-error, #ff4d4f);
+}
+
+/* Grupperade kort, samma mönster som iOS Settings - varje sektion är
+   ett avgränsat, avrundat "kort" istället för en platt lista. */
 .config-section {
   font-size: 11px;
   font-weight: 700;
-  opacity: 0.6;
-  margin-top: 16px;
+  opacity: 0.65;
+  margin-top: 18px;
   margin-bottom: 6px;
   text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.config-group {
+  border: 1px solid rgba(0, 234, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(0, 234, 255, 0.035);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.config-group .config-row,
+.config-group .config-row-block {
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(0, 234, 255, 0.12);
+}
+
+.config-group .config-row:last-child,
+.config-group .config-row-block:last-child {
+  border-bottom: none;
 }
 
 .config-row {
@@ -263,6 +329,28 @@
 
 select.config-input {
   cursor: pointer;
+  /* Tvingar en mörk native dropdown-popup (annars ritar webbläsaren
+     den vita/ljusa oavsett "color: inherit" på <select> - det är det
+     som sett ut som "fel färg"). */
+  color-scheme: dark;
+  background-color: rgba(4, 20, 26, 0.9);
+  color: var(--bob-text, var(--holo-blue));
+}
+
+select.config-input option {
+  background-color: #04141a;
+  color: var(--bob-text, var(--holo-blue));
+}
+
+.config-input {
+  color-scheme: dark;
+}
+
+.config-subgroup-title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+  padding: 8px 10px 2px;
 }
 
 .config-textarea {

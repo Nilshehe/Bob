@@ -1,5 +1,5 @@
 {
-    "model": "qwen3:4b",
+    "model": "gpt-oss:20b-cloud",
     "temperature": 0.7,
     "num_ctx": 8192,
     "num_predict": 8192,
@@ -52,6 +52,15 @@
         "list_apply_backups": false,
         "restore_from_backup": true
     },
-    "TALKING": false,
-    "VOICE_MODE": false
+    "TALKING": true,
+    "VOICE_MODE": false,
+    "tts_engine": "chatterbox",
+    "agents": {
+        "approval": {
+            "model": "gpt-oss:20b-cloud"
+        },
+        "code_ai": {
+            "model": "qwen3-coder:480b-cloud"
+        }
+    }
 }

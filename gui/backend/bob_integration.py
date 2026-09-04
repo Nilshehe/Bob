@@ -55,7 +55,8 @@ def gui_system_prompt() -> str:
         windows_block = (
             "\n\nCurrently open windows (use these exact window_id values, "
             "never guess or invent one — call list_windows if you need to "
-            "re-check):\n" + window_lines
+            "re-check, or list_widgets to see the actual elements inside "
+            "them):\n" + window_lines
         )
     else:
         windows_block = (

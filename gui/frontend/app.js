@@ -381,6 +381,7 @@ function createElementDom(
 // ---------------------------------------------------------------------
 const CONFIG_AUTO_EXCLUDED = new Set([
   "tools", "interupt_tools", "provider", "model", "api_key_envs",
+  "agents", "tts_engine",
 ]);
 
 const CONFIG_PROVIDERS = {
@@ -403,20 +404,57 @@ function renderConfigWidget(body, props, id) {
   const config = p.config || {};
   const models = p.models || [];
   const checkResult = p.check_result || null;
+  // check_results: {main: {...}, approval: {...}, edit_ai: {...}, ...}
+  // - separat från gamla check_result (main-modellen), så varje
+  // agents "testa modell"-knapp visar sitt eget resultat.
+  const checkResults = p.check_results || {};
+  const agents = config.agents || {};
 
   const root = document.createElement("div");
   root.className = "config-widget";
 
   const title = document.createElement("div");
   title.className = "config-title";
-  title.textContent = "BOB CONFIGURATION";
+  const titleText = document.createElement("span");
+  titleText.textContent = "BOB CONFIGURATION";
+  title.appendChild(titleText);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "config-close-btn";
+  closeBtn.title = "Stäng";
+  closeBtn.textContent = "\u2715";
+  closeBtn.addEventListener("click", (evt) => {
+    evt.stopPropagation();
+    sendEvent({ type: "html_action", element_id: id, action: "config_close" });
+  });
+  title.appendChild(closeBtn);
+
   root.appendChild(title);
+
+  // Grupperade "kort" (iOS Settings-mönster) - varje addSection()
+  // öppnar ett nytt kort och alla rader efter den (addToggle/
+  // addTextInput/manuellt tillagda rader) landar i det kortet tills
+  // nästa addSection() anropas.
+  let currentGroup = root;
 
   function addSection(text) {
     const section = document.createElement("div");
     section.className = "config-section";
     section.textContent = text;
     root.appendChild(section);
+
+    currentGroup = document.createElement("div");
+    currentGroup.className = "config-group";
+    root.appendChild(currentGroup);
+
+    return currentGroup;
+  }
+
+  function addSubgroupTitle(text) {
+    const t = document.createElement("div");
+    t.className = "config-subgroup-title";
+    t.textContent = text;
+    currentGroup.appendChild(t);
   }
 
   function sendConfigEvent(action, extra) {
@@ -446,7 +484,7 @@ function renderConfigWidget(body, props, id) {
 
     row.appendChild(text);
     row.appendChild(toggle);
-    root.appendChild(row);
+    currentGroup.appendChild(row);
   }
 
   function addTextInput(path, label, value, opts) {
@@ -473,7 +511,137 @@ function renderConfigWidget(body, props, id) {
     });
 
     row.appendChild(input);
-    root.appendChild(row);
+    currentGroup.appendChild(row);
+  }
+
+  // Återanvändbar provider+modell-väljare, används både för
+  // huvud-AI:n och för varje underagent (Approval/Edit/Research/
+  // Code AI) så de kan köra olika modeller - och olika providers.
+  // agentPath = null -> huvudmodellen (config.provider/config.model,
+  // toppnivå, bakåtkompatibelt). agentPath = "agents.<key>" ->
+  // underagent, sparas under config.agents.<key>.provider/model.
+  function addModelPicker(agentPath, agentCfg, resultKey, defaultModelHint) {
+    const currentProvider = (agentCfg && agentCfg.provider) || config.provider || "ollama";
+    const providerConfigPath = agentPath ? `${agentPath}.provider` : "provider";
+    const modelConfigPath = agentPath ? `${agentPath}.model` : "model";
+
+    const providerRow = document.createElement("div");
+    providerRow.className = "config-row";
+    const providerLabel = document.createElement("span");
+    providerLabel.textContent = "Provider";
+    const providerSelect = document.createElement("select");
+    providerSelect.className = "config-input";
+
+    Object.entries(CONFIG_PROVIDERS).forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      if (value === currentProvider) option.selected = true;
+      providerSelect.appendChild(option);
+    });
+
+    providerSelect.addEventListener("change", () => {
+      sendConfigEvent("config_provider", {
+        config_path: providerConfigPath,
+        value: providerSelect.value,
+      });
+    });
+
+    providerRow.appendChild(providerLabel);
+    providerRow.appendChild(providerSelect);
+    currentGroup.appendChild(providerRow);
+
+    const currentModel = (agentCfg && agentCfg.model) || "";
+
+    if (currentProvider === "ollama") {
+      if (models.length) {
+        const row = document.createElement("div");
+        row.className = "config-row";
+        const label = document.createElement("span");
+        label.textContent = "Modell";
+        const select = document.createElement("select");
+        select.className = "config-input";
+
+        if (agentPath) {
+          const blank = document.createElement("option");
+          blank.value = "";
+          blank.textContent = "(standard: " + (defaultModelHint || config.model || "-") + ")";
+          if (!currentModel) blank.selected = true;
+          select.appendChild(blank);
+        }
+
+        models.forEach((m) => {
+          const option = document.createElement("option");
+          option.value = m;
+          option.textContent = m;
+          if (m === currentModel) option.selected = true;
+          select.appendChild(option);
+        });
+
+        select.addEventListener("change", () => {
+          sendConfigEvent("config_model", {
+            config_path: modelConfigPath,
+            model: select.value,
+            value: select.value,
+          });
+        });
+
+        row.appendChild(label);
+        row.appendChild(select);
+        currentGroup.appendChild(row);
+      } else {
+        const hint = document.createElement("div");
+        hint.className = "config-hint missing";
+        hint.textContent = "Hittar ingen lokal Ollama (körs den på :11434?)";
+        currentGroup.appendChild(hint);
+      }
+    } else {
+      const envPath = `api_key_envs.${currentProvider}`;
+      const envValue = (config.api_key_envs && config.api_key_envs[currentProvider]) || "";
+      addTextInput(envPath, ".env-variabel för API-nyckel", envValue, {
+        placeholder: currentProvider.toUpperCase() + "_API_KEY",
+      });
+
+      const hasKeyMap = p.has_api_key_by_provider || {};
+      const hasKey = agentPath
+        ? Boolean(hasKeyMap[currentProvider])
+        : Boolean(p.has_api_key);
+      const keyHint = document.createElement("div");
+      keyHint.className = "config-hint " + (hasKey ? "ok" : "missing");
+      keyHint.textContent = hasKey
+        ? "\u2713 Nyckel hittad i .env"
+        : "\u2717 Ingen nyckel hittad i .env under det namnet";
+      currentGroup.appendChild(keyHint);
+
+      addTextInput(modelConfigPath, "Modell", currentModel, {
+        placeholder: agentPath ? (defaultModelHint || "t.ex. gpt-4o-mini") : "t.ex. gpt-4o-mini",
+      });
+    }
+
+    const checkRow = document.createElement("div");
+    checkRow.className = "config-row";
+    const checkBtn = document.createElement("button");
+    checkBtn.className = "config-check-model";
+    checkBtn.textContent = "TESTA OM MODELLEN FINNS";
+    checkBtn.addEventListener("click", () => {
+      checkBtn.disabled = true;
+      checkBtn.textContent = "TESTAR...";
+      sendConfigEvent("config_check_model", { agent: resultKey });
+    });
+    checkRow.appendChild(checkBtn);
+    currentGroup.appendChild(checkRow);
+
+    const result = checkResults[resultKey] || (resultKey === "main" ? checkResult : null);
+    if (
+      result &&
+      result.provider === currentProvider &&
+      result.model === (currentModel || config.model)
+    ) {
+      const resultEl = document.createElement("div");
+      resultEl.className = "config-hint " + (result.ok ? "ok" : "missing");
+      resultEl.textContent = (result.ok ? "\u2713 " : "\u2717 ") + result.message;
+      currentGroup.appendChild(resultEl);
+    }
   }
 
   // --- TOOLS ---
@@ -482,7 +650,7 @@ function renderConfigWidget(body, props, id) {
     addToggle(`tools.${name}`, name, Boolean(value));
   });
 
-  // --- APPROVAL ---
+  // --- APPROVAL (interrupt-on-tool) ---
   addSection("APPROVAL");
   Object.entries(config.interupt_tools || {}).forEach(([name, value]) => {
     addToggle(`interupt_tools.${name}`, name, Boolean(value));
@@ -508,106 +676,49 @@ function renderConfigWidget(body, props, id) {
     }
   });
 
-  // --- MODEL ---
-  addSection("MODEL");
-
-  const providerRow = document.createElement("div");
-  providerRow.className = "config-row";
-  const providerLabel = document.createElement("span");
-  providerLabel.textContent = "Provider";
-  const providerSelect = document.createElement("select");
-  providerSelect.className = "config-input";
-
-  const currentProvider = config.provider || "ollama";
-  Object.entries(CONFIG_PROVIDERS).forEach(([value, label]) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    if (value === currentProvider) option.selected = true;
-    providerSelect.appendChild(option);
-  });
-
-  providerSelect.addEventListener("change", () => {
-    sendConfigEvent("config_provider", { value: providerSelect.value });
-  });
-
-  providerRow.appendChild(providerLabel);
-  providerRow.appendChild(providerSelect);
-  root.appendChild(providerRow);
-
-  if (currentProvider === "ollama") {
-    if (models.length) {
-      const row = document.createElement("div");
-      row.className = "config-row";
-      const label = document.createElement("span");
-      label.textContent = "Modell";
-      const select = document.createElement("select");
-      select.className = "config-input";
-
-      models.forEach((m) => {
-        const option = document.createElement("option");
-        option.value = m;
-        option.textContent = m;
-        if (m === config.model) option.selected = true;
-        select.appendChild(option);
-      });
-
-      select.addEventListener("change", () => {
-        sendConfigEvent("config_model", { model: select.value, value: select.value });
-      });
-
-      row.appendChild(label);
-      row.appendChild(select);
-      root.appendChild(row);
-    } else {
-      const hint = document.createElement("div");
-      hint.className = "config-hint missing";
-      hint.textContent = "Hittar ingen lokal Ollama (körs den på :11434?)";
-      root.appendChild(hint);
-    }
-  } else {
-    const envPath = `api_key_envs.${currentProvider}`;
-    const envValue = (config.api_key_envs && config.api_key_envs[currentProvider]) || "";
-    addTextInput(envPath, ".env-variabel för API-nyckel", envValue, {
-      placeholder: currentProvider.toUpperCase() + "_API_KEY",
+  // --- TTS ENGINE: bara relevant/synlig när TALKING är på ---
+  if (config.TALKING) {
+    addSection("TTS");
+    const row = document.createElement("div");
+    row.className = "config-row";
+    const label = document.createElement("span");
+    label.textContent = "Röstmotor";
+    const select = document.createElement("select");
+    select.className = "config-input";
+    const ttsEngines = { piper: "Piper", chatterbox: "Chatterbox (multilingual)" };
+    const currentEngine = config.tts_engine || "piper";
+    Object.entries(ttsEngines).forEach(([value, lbl]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = lbl;
+      if (value === currentEngine) option.selected = true;
+      select.appendChild(option);
     });
-
-    const hasKey = Boolean(p.has_api_key);
-    const keyHint = document.createElement("div");
-    keyHint.className = "config-hint " + (hasKey ? "ok" : "missing");
-    keyHint.textContent = hasKey
-      ? "\u2713 Nyckel hittad i .env"
-      : "\u2717 Ingen nyckel hittad i .env under det namnet";
-    root.appendChild(keyHint);
-
-    addTextInput("model", "Modell", config.model || "", {
-      placeholder: "t.ex. gpt-4o-mini",
+    select.addEventListener("change", () => {
+      sendConfigEvent("config_text", { config_path: "tts_engine", value: select.value });
     });
-
-    const checkRow = document.createElement("div");
-    checkRow.className = "config-row";
-    const checkBtn = document.createElement("button");
-    checkBtn.className = "config-check-model";
-    checkBtn.textContent = "TESTA OM MODELLEN FINNS";
-    checkBtn.addEventListener("click", () => {
-      checkBtn.disabled = true;
-      checkBtn.textContent = "TESTAR...";
-      sendConfigEvent("config_check_model");
-    });
-    checkRow.appendChild(checkBtn);
-    root.appendChild(checkRow);
-
-    if (
-      checkResult &&
-      checkResult.provider === currentProvider &&
-      checkResult.model === config.model
-    ) {
-      const resultEl = document.createElement("div");
-      resultEl.className = "config-hint " + (checkResult.ok ? "ok" : "missing");
-      resultEl.textContent = (checkResult.ok ? "\u2713 " : "\u2717 ") + checkResult.message;
-      root.appendChild(resultEl);
-    }
+    row.appendChild(label);
+    row.appendChild(select);
+    currentGroup.appendChild(row);
   }
+
+  // --- MODEL (huvud-AI:n) ---
+  addSection("MODEL");
+  addModelPicker(null, null, "main");
+
+  // --- AI PER AGENT: Approval/Edit/Research/Code AI kan var och en
+  // köra en egen provider/modell, oberoende av huvud-AI:n och av
+  // varandra. Tomt fält = ärver providerns default-modell (se
+  // config_manager.get_agent_model).
+  addSection("AI PER AGENT");
+  addSubgroupTitle("Approval AI");
+  addModelPicker("agents.approval", agents.approval, "approval", "qwen3:4b");
+  addSubgroupTitle("Edit AI");
+  addModelPicker("agents.edit_ai", agents.edit_ai, "edit_ai", "qwen3:4b");
+  addSubgroupTitle("Research AI");
+  addModelPicker("agents.research_ai", agents.research_ai, "research_ai", "qwen3:4b");
+  addSubgroupTitle("Code AI");
+  addModelPicker("agents.code_ai", agents.code_ai, "code_ai", "qwen3:4b");
 
   // --- RESTART ---
   const restart = document.createElement("button");

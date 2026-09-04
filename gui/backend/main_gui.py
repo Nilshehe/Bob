@@ -13,11 +13,9 @@ Kör:  python main_gui.py
 för att starta GUI:t fristående (för utveckling/test) - det motsvarar då
 launch_gui(), som blockerar tills alla fönster stängts.
 
-pywebview:s händelseloop (webview.start()) måste köras i huvudtråden på
-vissa plattformar (krävs på Windows/macOS). start_gui()/launch_gui_background()
-kör den i en bakgrundstråd istället så att Bob kan anropa den som ett
-vanligt verktyg mitt i en pågående konversation - fungerar på Linux, men
-tänk på begränsningen ovan om du kör Bob på Windows/macOS.
+pywebview:s händelseloop (webview.start()) måste köras i huvudtråden
+på Windows/macOS. Bob:s agent, LLM, TTS och verktyg kan köras i
+bakgrundstrådar medan huvudtråden ägs av pywebview.
 """
 import threading
 
@@ -55,11 +53,11 @@ def is_gui_running() -> bool:
 
 
 def start_gui():
-    """Slå på GUI:t: startar servern (om den inte redan kör) och öppnar
-    Bobs fönster (återställer tidigare fönster om det finns några
-    sparade, annars ett nytt huvudfönster). Blockerar inte anroparen -
-    webview:s händelseloop körs i en egen bakgrundstråd. No-op om GUI:t
-    redan är igång."""
+    """Slå på GUI:t och öppna Bobs fönster.
+
+    Kan anropas från Bob:s bakgrundstråd. pywebview:s event loop startas
+    inte här eftersom webview.start() måste köras i huvudtråden.
+    """
     global _gui_active
 
     with _lock:
@@ -72,15 +70,6 @@ def start_gui():
             wm.create_window(title="Bob", window_id="main", width=1000, height=650)
         _gui_active = True
 
-    def _run_webview():
-        global _gui_active
-        webview.start()
-        # webview.start() returnerar när alla fönster stängts (via
-        # stop_gui, eller att användaren stänger dem för hand).
-        with _lock:
-            _gui_active = False
-
-    threading.Thread(target=_run_webview, daemon=True, name="gui-webview").start()
 
 
 def stop_gui():
@@ -97,10 +86,11 @@ def stop_gui():
 
 
 def launch_gui():
-    """Kör GUI:t blockerande i anropande tråd (kräver huvudtråden på
-    Windows/macOS). Används av `python main_gui.py` för fristående
-    utveckling/test. Bob:s riktiga process ska istället låta GUI:t
-    börja avstängt och styra det via start_gui()/stop_gui()."""
+    """Kör pywebview:s event loop på processens huvudtråd.
+
+    Bob:s agent ska köras i en separat bakgrundstråd. start_gui() och
+    stop_gui() kan sedan användas från Bob:s vanliga verktyg.
+    """
     global _gui_active
 
     _ensure_server()
@@ -115,7 +105,11 @@ def launch_gui():
 
 
 def launch_gui_background():
-    """Gammalt namn - motsvarar nu start_gui()."""
+    """Bakåtkompatibelt namn.
+
+    Startar inte webview.start() i en bakgrundstråd. Den riktiga
+    pywebview-eventloopen måste ägas av huvudtråden via launch_gui().
+    """
     start_gui()
 
 

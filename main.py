@@ -11,7 +11,7 @@ from voice.wake_word import wait_for_wake_word
 from tools.code_ai import register_notify_callback
 from tools.research_ai import register_notify_callback as register_research_notify_callback
 from tools.edit_ai import register_notify_callback as register_edit_notify_callback
-from tools.approval_agent import run_approval_conversation
+from tools.approval_agent import run_approval_conversation, arun_approval_conversation
 from voice.tts import speak
 import asyncio
 import threading
@@ -235,9 +235,12 @@ def make_agent() -> Any:
     config = load_config()
     provider = config.get("provider", "ollama")
 
+    import config_manager
+
     if provider == "ollama":
-        model = ChatOllama(
-            model=config["model"],
+        model = config_manager.make_chat_model(
+            provider,
+            config["model"],
             temperature=config.get("temperature", 0.7),
             reasoning=True,
             num_ctx=config.get("num_ctx", 8192),
@@ -251,16 +254,10 @@ def make_agent() -> Any:
         # widgeten (config_manager.get_api_key_env_name), inte från
         # providerns "vanliga" env-variabelnamn - så du kan döpa .env-
         # variabeln fritt.
-        from langchain.chat_models import init_chat_model
-        import config_manager
-
-        api_key = os.environ.get(config_manager.get_api_key_env_name(provider))
-
-        model = init_chat_model(
+        model = config_manager.make_chat_model(
+            provider,
             config["model"],
-            model_provider=provider,
             temperature=config.get("temperature", 0.7),
-            api_key=api_key,
         )
 
     enabled_tools = get_enabled_tools()
@@ -289,9 +286,31 @@ def reload_agent():
 
     agent = make_agent()
 
+    # Approval/Edit/Research/Code AI bygger sin egen LLM+agent en gång
+    # vid import (så de kan köra en annan provider/modell än
+    # huvud-AI:n - se config_manager.get_agent_settings). "Apply &
+    # Restart" i settings-widgeten ska räkna om alla, inte bara
+    # huvud-AI:n, annars kräver ett providerbyte för en underagent en
+    # full processomstart.
+    reloaded = ["main"]
+    for modname, reload_fn in (
+        ("tools.approval_agent", "reload_approval_agent"),
+        ("tools.edit_ai", "reload_edit_agent"),
+        ("tools.research_ai", "reload_research_agent"),
+        ("tools.code_ai", "reload_code_agent"),
+    ):
+        try:
+            import importlib
+
+            mod = importlib.import_module(modname)
+            getattr(mod, reload_fn)()
+            reloaded.append(modname.rsplit(".", 1)[-1])
+        except Exception as exc:
+            print(f"\033[33mKunde inte ladda om {modname}: {exc}\033[0m")
+
     return {
         "ok": True,
-        "message": "Agent reloaded from config.json.",
+        "message": f"Reloaded from config.json: {', '.join(reloaded)}.",
     }
 
 async def ask(msg: str, agent: Any, user_id: str = "user"):
@@ -318,9 +337,13 @@ async def ask(msg: str, agent: Any, user_id: str = "user"):
                 yield token_data, block
 
 async def main(msg, userid):
-    async for token_data, block in ask(msg, agent, userid):
-        if token_data:
-            yield token_data, block
+    try:
+        async for token_data, block in ask(msg, agent, userid):
+            if token_data:
+                yield token_data, block
+    except Exception as exc:
+        print(f"\033[31mLLM-anropet misslyckades: {exc}\033[0m")
+        _emit("Kunde inte kontakta Ollama just nu.", "text")
 
 def _get_last_ai_reasoning(cfg) -> str:
     try:
@@ -338,16 +361,66 @@ def _get_last_ai_reasoning(cfg) -> str:
     return ""
 
 def _get_user_reply(voice_mode: bool):
-    def _inner(ai_text: str) -> str:
+    """Returnerar en async funktion som hämtar användarens svar under
+    en Approval AI-konversation.
+
+    Röstläge: spelar in från mikrofonen i en bakgrundstråd (blockerar
+    inte event-loopen).
+
+    Textläge (terminal ELLER GUI): väntar på nästa "user_message"-
+    händelse på event_queue och tar bort den från kön när den hittas -
+    annars skulle den råka processas igen som ett nytt vanligt
+    meddelande efteråt. Tidigare användes en blockerande input()-
+    inläsning här, vilket frös HELA asyncio-loopen (inklusive
+    websocket-bryggan) medan Approval AI väntade på svar - ett svar
+    skrivet i GUI:t skickas via run_coroutine_threadsafe till just den
+    loopen, så det kunde aldrig komma fram förrän input() returnerade.
+    Den bugg är fixad genom att aldrig blockera loopen: vi `await`:ar
+    event_queue istället för att läsa stdin direkt, och läser samtidigt
+    in en terminalrad (om VOICE_MODE inte är på) som en likvärdig källa
+    - vilket som kommer in först vinner.
+
+    Andra händelsetyper som råkar komma in medan vi väntar (t.ex. att
+    en bakgrundsjobb blir klar) läggs tillbaka på kön oförändrade så de
+    inte går förlorade.
+    """
+    async def _inner(ai_text: str, input_enabled: asyncio.Event = None) -> str:
         if voice_mode:
             print("\n(listening for your reply...)")
-            reply = stt_main()
+            reply = await asyncio.to_thread(stt_main)
             print(f"You said: {reply}")
             return reply
-        return input("\nYour reply: ")
+
+        print("\nYour reply (terminal or GUI): ", end="", flush=True)
+
+        # Låt terminalens input_loop få skriva in svaret i kön också -
+        # den pausar annars sig själv tills input_enabled sätts igen.
+        # GUI-svar kräver ingen sådan flagga, de postar till kön direkt
+        # när användaren skickar dem oavsett input_enabled.
+        if input_enabled is not None:
+            input_enabled.set()
+
+        held_back = []
+        try:
+            while True:
+                event = await event_queue.get()
+
+                if event.get("type") == "user_message":
+                    return event.get("content", "")
+
+                # Inte ett svar från användaren (t.ex. en bakgrundsjobb-
+                # notis) - lägg tillbaka den så event_loop fortfarande
+                # processar den som vanligt när vi är klara.
+                held_back.append(event)
+        finally:
+            if input_enabled is not None:
+                input_enabled.clear()
+            for ev in held_back:
+                await event_queue.put(ev)
+
     return _inner
 
-def interupt_identifier(chunk, voice_mode: bool = None):
+async def interupt_identifier(chunk, voice_mode: bool = None, input_enabled: asyncio.Event = None):
     if voice_mode is None:
         voice_mode = VOICE_MODE
     if "__interrupt__" in chunk["data"]:
@@ -359,22 +432,30 @@ def interupt_identifier(chunk, voice_mode: bool = None):
         args = req.get("args") or req.get("arguments") or {}
         reasoning = _get_last_ai_reasoning(config)
         _broadcast_agent_stream("interrupt", f"{tool_name}({args})")
-        decision = run_approval_conversation(tool_name, args, reasoning, _get_user_reply(voice_mode), TALKING)
+
+        get_reply = _get_user_reply(voice_mode)
+
+        async def get_reply_bound(ai_text):
+            return await get_reply(ai_text, input_enabled)
+
+        decision = await arun_approval_conversation(
+            tool_name, args, reasoning, get_reply_bound, TALKING
+        )
         if decision["type"] == "reject":
             print(f"\033[31mRejected: {decision['message']}\033[0m")
             _broadcast_agent_stream("interrupt", f"Rejected: {decision['message']}")
         else:
             print("\033[32mApproved.\033[0m")
             _broadcast_agent_stream("interrupt", "Approved.")
-        for token_data, block in resume_after_interrupt(agent, config, decision):
+        async for token_data, block in resume_after_interrupt(agent, config, decision):
             response, node_type = get_last_text(token_data, block)
             if node_type == "interrupt":
-                interupt_identifier(block, voice_mode)
+                await interupt_identifier(block, voice_mode, input_enabled)
             else:
                 _emit(response, node_type)
 
-def resume_after_interrupt(agent, config, decision):
-    for block in agent.stream(
+async def resume_after_interrupt(agent, config, decision):
+    async for block in agent.astream(
         Command(resume={"decisions": [decision]}),
         config=config,
         stream_mode=["updates", "messages"],
@@ -462,7 +543,7 @@ async def event_loop(input_enabled):
             async for token_data, block in main(event["content"], "user123"):
                 response, node_type = get_last_text(token_data, block)
                 if node_type == "interrupt":
-                    interupt_identifier(block)
+                    await interupt_identifier(block, input_enabled=input_enabled)
                 else:
                     _emit(response, node_type)
                     if node_type == "text" and response:
@@ -470,7 +551,7 @@ async def event_loop(input_enabled):
             if TALKING:
                 words_to_speak = " ".join(WORDS)
                 if words_to_speak:
-                    await asyncio.to_thread(speak, words_to_speak)
+                    await speak(words_to_speak)
             input_enabled.set()
         elif event["type"] == "code_ai_finished":
             WORDS = []
@@ -481,7 +562,7 @@ async def event_loop(input_enabled):
             ):
                 response, node_type = get_last_text(token_data, block)
                 if node_type == "interrupt":
-                    interupt_identifier(block)
+                    await interupt_identifier(block, input_enabled=input_enabled)
                 else:
                     _emit(response, node_type)
                     if node_type == "text" and response:
@@ -489,7 +570,7 @@ async def event_loop(input_enabled):
             if TALKING:
                 words_to_speak = " ".join(WORDS)
                 if words_to_speak:
-                    await asyncio.to_thread(speak, words_to_speak)
+                    await speak(words_to_speak)
             input_enabled.set()
         elif event["type"] == "research_ai_finished":
             WORDS = []
@@ -500,7 +581,7 @@ async def event_loop(input_enabled):
             ):
                 response, node_type = get_last_text(token_data, block)
                 if node_type == "interrupt":
-                    interupt_identifier(block)
+                    await interupt_identifier(block, input_enabled=input_enabled)
                 else:
                     _emit(response, node_type)
                     if node_type == "text" and response:
@@ -508,7 +589,7 @@ async def event_loop(input_enabled):
             if TALKING:
                 words_to_speak = " ".join(WORDS)
                 if words_to_speak:
-                    await asyncio.to_thread(speak, words_to_speak)
+                    await speak(words_to_speak)
             input_enabled.set()
         elif event["type"] == "edit_ai_finished":
             WORDS = []
@@ -519,7 +600,7 @@ async def event_loop(input_enabled):
             ):
                 response, node_type = get_last_text(token_data, block)
                 if node_type == "interrupt":
-                    interupt_identifier(block)
+                    await interupt_identifier(block, input_enabled=input_enabled)
                 else:
                     _emit(response, node_type)
                     if node_type == "text" and response:
@@ -527,7 +608,7 @@ async def event_loop(input_enabled):
             if TALKING:
                 words_to_speak = " ".join(WORDS)
                 if words_to_speak:
-                    await asyncio.to_thread(speak, words_to_speak)
+                    await speak(words_to_speak)
             input_enabled.set()
 
 async def app():
@@ -557,4 +638,7 @@ def run_bob():
 if __name__ == "__main__":
     bob_thread = threading.Thread(target=run_bob, daemon=True)
     bob_thread.start()
+    from gui.backend.main_gui import launch_gui
+
+    launch_gui()
     bob_thread.join()

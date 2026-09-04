@@ -21,8 +21,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 
-_code_llm = ChatOllama(model=CODE_MODEL)
-
 WORKSPACE_DIR = Path(__file__).resolve().parent.parent / "ai_workspace" / "code"
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -255,11 +253,26 @@ SYSTEM_PROMPT = (
     "headers."
 )
 
-_code_agent = create_agent(
-    model=_code_llm,
-    system_prompt=SYSTEM_PROMPT,
-    tools=CODE_TOOLS,
-)
+def _build_code_agent():
+    import config_manager
+    settings = config_manager.get_agent_settings("code_ai", CODE_MODEL)
+    llm = config_manager.make_chat_model(settings["provider"], settings["model"])
+    return llm, create_agent(
+        model=llm,
+        system_prompt=SYSTEM_PROMPT,
+        tools=CODE_TOOLS,
+    )
+
+
+def reload_code_agent():
+    """Bygger om Code AI:s modell/agent från config.json (agents.code_ai)
+    - anropas från main.py:s reload_agent()."""
+    global _code_llm, _code_agent
+    _code_llm, _code_agent = _build_code_agent()
+    return {"ok": True}
+
+
+_code_llm, _code_agent = _build_code_agent()
 
 # ---------------------------------------------------------------------------
 # Egen, ständigt levande event loop i bakgrundstråd
