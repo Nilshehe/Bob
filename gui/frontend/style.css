@@ -1,10 +1,10 @@
-:root {
+﻿:root {
   --holo-blue: #00eaff;
   --holo-glow: rgba(0, 234, 255, 0.35);
 
   /* Bobs centrala tema (theme.py) - default innan theme_state kommer in
-     över websocket vid anslutning. app.js skriver över dessa (och
-     --holo-blue/--holo-glow ovan) live när temat byts. */
+     Ã¶ver websocket vid anslutning. app.js skriver Ã¶ver dessa (och
+     --holo-blue/--holo-glow ovan) live nÃ¤r temat byts. */
   --bob-accent: var(--holo-blue);
   --bob-accent-hue: 189deg;
   --bob-background: #04141a;
@@ -328,7 +328,7 @@ html, body {
 
 
 /* =====================================================================
-   Röst-cirkel
+   Voice circle
    ===================================================================== */
 
 #voice-circle {
@@ -348,8 +348,8 @@ html, body {
   transition: opacity 0.25s ease;
 }
 #voice-circle.hidden {
-  /* Bob Circle göms numera bara i extrema fall (t.ex. innan första
-     websocket-anslutningen) - i normal drift är den alltid synlig. */
+  /* Bob Circle gÃ¶ms numera bara i extrema fall (t.ex. innan fÃ¶rsta
+     WebSocket connection) - i normal operation Ã¤r den alltid synlig. */
   opacity: 0;
   pointer-events: none;
 }
@@ -374,7 +374,7 @@ html, body {
   transition: transform 0.08s linear, box-shadow 0.08s linear;
 }
 
-/* Vila - subtil "andning" när Bob varken lyssnar eller pratar (ROADMAP #5) */
+/* Idle - subtle "breathing" when Bob is neither listening nor speaking (ROADMAP #5) */
 #voice-circle.idle #voice-circle-core {
   animation: bob-breathe 3.2s ease-in-out infinite;
 }
@@ -383,7 +383,7 @@ html, body {
   50%      { transform: scale(1.1); box-shadow: 0 0 40px var(--holo-blue); opacity: 1; }
 }
 
-/* Kort uppljusning när Bob väcks (ROADMAP #5 "lysa upp när Bob vaknar") */
+/* Short light-up when Bob wakes (ROADMAP #5 "light up when Bob wakes") */
 #voice-circle.woke #voice-circle-core {
   animation: bob-wake-flash 0.9s ease-out 1;
 }
@@ -393,7 +393,7 @@ html, body {
   100% { transform: scale(1);    box-shadow: 0 0 20px var(--holo-blue); }
 }
 
-/* "Spänner till" när Bob blir aktiv/pratar (ROADMAP #5) */
+/* "Tenses up" when Bob becomes active/speaks (ROADMAP #5) */
 #voice-circle.active #voice-circle-ring {
   border-color: var(--holo-blue);
   animation: bob-active-ring 1s ease-in-out infinite;
@@ -617,7 +617,7 @@ html, body {
 #stream-settings-btn:hover,
 #stream-hide-btn:hover { background: rgba(0, 234, 255, 0.15); }
 
-/* Resize-handtag nere i högra hörnet, samma stil som gui-elementens. */
+/* Resize handle bottom right, same style as gui-elements. */
 #stream-resize-handle {
   position: absolute;
   right: 2px;
@@ -736,8 +736,8 @@ html, body {
 }
 
 /* -----------------------------------------------------------------
-   Göm/visa-flik för live-panelen. Ligger alltid synlig, oberoende av
-   #stream-panel.hidden, så det finns en väg tillbaka in.
+   Hide/show tab for the live panel. Always visible, regardless of
+   #stream-panel.hidden, so there is a way back in.
    ----------------------------------------------------------------- */
 #stream-toggle-tab {
   position: fixed;
@@ -759,9 +759,9 @@ html, body {
 #stream-toggle-tab:hover { opacity: 1; background: rgba(0, 234, 255, 0.15); }
 #stream-toggle-tab.active { opacity: 0; pointer-events: none; }
 
-/* Helt gömd (via ✕-knappen eller Bobs GUI-verktyg): tar bort fliken
-   fysiskt, till skillnad från .active som bara döljer den visuellt.
-   Ctrl+Shift+L tar fram allt igen. */
+/* Completely hidden (via the • button or Bob's GUI tools): removes the tab
+   physically, as opposed to .active which only hides it visually.
+   Ctrl+Shift+L brings everything back again. */
 #stream-toggle-tab.fully-hidden { display: none; }
 
 /* -----------------------------------------------------------------
@@ -824,4 +824,6 @@ body.small-mode #stream-toggle-tab,
 body.small-mode #bob-menu {
     display: none !important;
 }
+
+
 

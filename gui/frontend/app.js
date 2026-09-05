@@ -830,7 +830,7 @@ const CHATTERBOX_LANGUAGES = {
 
   sv: "Svenska", en: "Engelska", de: "Tyska", es: "Spanska",
 
-  fr: "Franska", it: "Italienska", nl: "NederlÃ¤ndska", pl: "Polska",
+  fr: "French", it: "Italian", nl: "NederlÃ¤ndska", pl: "Polish",
 
   pt: "Portugisiska", ru: "Ryska", tr: "Turkiska", ar: "Arabiska",
 
@@ -4658,7 +4658,7 @@ function apply3DProps(
 
 // =======================================================================
 
-// Permanent chatt-input
+// Permanent chat input
 
 // =======================================================================
 
@@ -4907,9 +4907,9 @@ function handleVoiceState(msg) {
 
   // Bob Circle Ã¤r ALLTID synlig nu (ROADMAP #5) - gÃ¶ms inte lÃ¤ngre bara
 
-  // fÃ¶r att Voice Mode Ã¤r av. I textlÃ¤ge visar den bara "vilar"
+  // fÃ¶r att Voice Mode Ã¤r av. I textlÃ¤ge visar den bara "idle"
 
-  // (idle-andning); i Voice Mode tar awake/listening-klasserna Ã¶ver.
+  // (idle-breathing); in Voice Mode the awake/listening classes take over.
 
   voiceCircle.classList.remove("hidden");
 
@@ -4923,21 +4923,21 @@ function handleVoiceState(msg) {
 
   voiceCircleLabel.textContent = !voiceModeOn
 
-    ? "vilar"
+    ? "idle"
 
-    : msg.awake ? "lyssnar..." :
+    : msg.awake ? "listening..." :
 
       msg.listening ? "vÃ¤ntar pÃ¥ \u201eBob\u201d..." :
 
-      "vilar";
+      "idle";
 
 
 
   if (voiceModeOn && typeof msg.level === "number") {
 
-    // RÃ¥ RMS-nivÃ¥ Ã¤r ofta liten (t.ex. 0.001-0.3) - skala upp och klÃ¤mm
+    // Raw RMS level is often small (e.g. 0.001-0.3) - scale up and clamp
 
-    // fast mellan 0 och 1 sÃ¥ CSS-transformen blir tydlig.
+    // fast between 0 and 1 so the CSS transform becomes clear.
 
     const scaled = Math.min(1, msg.level * 12);
 
@@ -5150,7 +5150,7 @@ function renderBobApps(apps) {
 function renderBobWidgets(widgets) {
     let html = `
       <div class="bob-menu-row">
-        <button type="button" data-action="add_widget">Lägg till widget</button>
+        <button type="button" data-action="add_widget">Add widget</button>
       </div>
     `;
 
@@ -5158,11 +5158,11 @@ function renderBobWidgets(widgets) {
         html += widgets.map(w => `
           <div class="bob-menu-row">
             <span>${w.label || w.type} <span style="opacity:.5">(${w.element_id})</span></span>
-            <button type="button" data-remove="${w.element_id}">Ta bort</button>
+            <button type="button" data-remove="${w.element_id}">Remove</button>
           </div>
         `).join("");
     } else {
-        html += `<div class="bob-menu-empty">Inga widgets öppna just nu.</div>`;
+        html += `<div class="bob-menu-empty">No widgets open at the moment.</div>`;
     }
 
     bobMenuBody.innerHTML = html;
@@ -5318,11 +5318,11 @@ const STREAM_TYPES = ["text", "reasoning", "tool_call_chunk", "interrupt"];
 
 
 
-// Panelens state (synlighet, position, storlek, filter) Ã¤gs av backend nu
+// Panel's state (visibility, position, size, filter) is now owned by backend
 
-// - dels sÃ¥ Bob kan styra den via sina GUI-verktyg, dels sÃ¥ den Ã¶verlever
+// - partly so Bob can control it via his GUI tools, partly so it survives
 
-// omstart precis som fÃ¶nster/element. Den hÃ¤r flaggan fÃ¶rhindrar att vÃ¥rt
+// restart exactly like windows/elements. This flag prevents our
 
 // eget "change"-event pÃ¥ en checkbox skickas tillbaka till servern nÃ¤r det
 
@@ -5492,7 +5492,7 @@ STREAM_TYPES.forEach((t) => {
 
 // ---------------------------------------------------------------------
 
-// Live-svarswidget: vilka fÃ¶nster den ska visas i
+// Live-response widget: which windows it should be shown in
 
 // ---------------------------------------------------------------------
 
@@ -5504,9 +5504,9 @@ const streamWindowList = document.getElementById("stream-window-list");
 
 
 
-let knownWindows = [];     // [{window_id, title, ...}, ...] - frÃ¥n backend
+let knownWindows = [];     // [{window_id, title, ...}, ...] - from backend
 
-let selectedWindows = [];  // window_id:n som Ã¤r valda; tom lista = alla fÃ¶nster
+let selectedWindows = [];  // window_ids that are selected; empty list = all windows
 
 
 
@@ -5684,17 +5684,17 @@ streamClearBtn.addEventListener("click", () => {
 
 // ---------------------------------------------------------------------
 
-// Live-svarswidget: gÃ¶mma helt (panel + flik) och ta fram igen
+// Live-response widget: hide completely (panel + tab) and show again
 
 // ---------------------------------------------------------------------
 
-// Skiljer sig frÃ¥n den vanliga toggle-fliken: den fliken ska alltid gÃ¥
+// Differs from the regular toggle tab: that tab should always be clickable
 
-// att klicka pÃ¥ fÃ¶r att ta fram panelen igen. Den hÃ¤r knappen gÃ¶mmer
+// to bring the panel back. This button hides
 
-// ANDRA fliken ocksÃ¥, sÃ¥ det finns ingen vÃ¤g tillbaka i UI:t fÃ¶rutom
+// OTHER tab as well, so there is no way back in the UI except
 
-// snabbkommandot Ctrl+Shift+L (eller att Bob sjÃ¤lv sÃ¤tter tillbaka det
+// the keyboard shortcut Ctrl+Shift+L (or if Bob himself sets it back)
 
 // via set_stream_panel).
 
@@ -5786,15 +5786,15 @@ window.addEventListener("keydown", (e) => {
 
 // ---------------------------------------------------------------------
 
-// Live-svarswidget: flytta (dra i headern) och Ã¤ndra storlek (handtag
+// Live-response widget: move (drag header) and change size (handle
 
-// nere till hÃ¶ger). Samma mÃ¶nster som makeDraggable/makeResizable fÃ¶r
+// bottom right). Same pattern as makeDraggable/makeResizable for
 
-// vanliga gui-element, men skrÃ¤ddarsytt fÃ¶r panelen eftersom den inte
+// regular GUI elements, but customized for the panel because it is not
 
 // Ã¤r ett element i "elements"-registret och styrs via
 
-// stream_panel_updated/stream_panel_state istÃ¤llet fÃ¶r
+// stream_panel_updated/stream_panel_state instead of
 
 // element_moved/element_resized.
 
@@ -5812,9 +5812,9 @@ window.addEventListener("keydown", (e) => {
 
   streamHeader.addEventListener("mousedown", (e) => {
 
-    // LÃ¥t klick pÃ¥ knapparna i headern (âš™/âœ•) fungera som vanligt
+    // Let clicks on buttons in the header (✓/✔) work as usual
 
-    // istÃ¤llet fÃ¶r att starta en drag.
+    // instead of starting a drag.
 
     if (e.target.closest("button")) {
 
@@ -5842,7 +5842,7 @@ window.addEventListener("keydown", (e) => {
 
     // Panelen Ã¤r CSS-positionerad med "right" som standard. Byt till
 
-    // left/top-styrning sÃ¥ den faktiskt kan dras fritt.
+    // left/top control so it can actually be dragged freely.
 
     streamPanel.style.right = "auto";
 
@@ -5998,9 +5998,9 @@ function handleAgentStream(msg) {
 
 
 
-  // Approval AI:s text Ã¤r ocksÃ¥ token-streamad.
+  // Approval AI's text is also token-streamed.
 
-  // Behandla den som vanlig text sÃ¥ att varje token inte blir en ny rad.
+  // Treat it as plain text so that each token does not become a new line.
 
   const isTextStream =
 
@@ -6012,7 +6012,7 @@ function handleAgentStream(msg) {
 
 
 
-  // TurmarkÃ¶r: skickas av backend infÃ¶r varje ny AI-tur.
+  // Turn marker: sent by backend for each new AI turn.
 
   if (nodeType === "turn") {
 
@@ -6044,7 +6044,7 @@ function handleAgentStream(msg) {
 
 
 
-  // Text/reasoning/Approval AI strÃ¶mmar token fÃ¶r token.
+  // Text/reasoning/Approval AI streams token by token.
 
   // Klistra ihop tokens i samma rad.
 
@@ -6095,4 +6095,8 @@ function handleAgentStream(msg) {
   streamBody.scrollTop = streamBody.scrollHeight;
 
 }
+
+
+
+
 

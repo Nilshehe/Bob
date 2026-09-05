@@ -1,6 +1,6 @@
-/* html_widgets.css
-   Styling för den generella "html"-elementtypen (GUI-specen punkt 1-60).
-   Laddas från index.html, efter style.css. */
+﻿/* html_widgets.css
+   Styling for the generic "html" element type (GUI spec point 1-60).
+   Loaded from index.html, after style.css. */
 
 .html-widget-body {
   width: 100%;
@@ -91,11 +91,11 @@
   box-shadow: 0 0 8px var(--bob-accent);
 }
 
-/* Gråskala + temafärgning för media som saknar eget tema (punkt 59-60).
-   Duotone via CSS-filter, läser --bob-accent-hue live så ett temabyte
-   (punkt 45) räcker - widgeten behöver aldrig skapas om.
-   raw=true (klassen "raw") stänger av transformen helt: t.ex. foton
-   eller en riktig kamerabild där färg bär information. */
+/* Grayscale + theme coloring for media lacking its own theme (point 59-60).
+   Duotone via CSS filter, reading --bob-accent-hue live so a theme change
+   (point 45) is enough - the widget never needs to be recreated.
+   raw=true (class "raw") turns off the transform completely: e.g. photos
+   or a real camera image where color carries information. */
 .html-c-image,
 .html-c-video,
 .html-c-camera {
@@ -164,8 +164,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   color: var(--bob-text, var(--holo-blue));
-  /* Holografisk scrollbar, samma mönster som #stream-body - annars
-     visas webbläsarens defaultscrollbar (fel färg mot det mörka
+  /* Holographic scrollbar, same pattern as #stream-body - otherwise
+     shown is the browser's default scrollbar (wrong color against the dark
      temat). */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 234, 255, 0.55) rgba(0, 234, 255, 0.04);
@@ -221,9 +221,9 @@
   border-color: var(--bob-error, #ff4d4f);
 }
 
-/* Grupperade kort, samma mönster som iOS Settings - varje sektion är
-   ett avgränsat, avrundat "kort" istället för en platt lista. Numera
-   hopfällbara (dropdown) - rubriken är klickbar. */
+/* Grouped cards, same pattern as iOS Settings - each section is
+   an enclosed, rounded "card" instead of a flat list. Nowadays
+   collapsible (dropdown) - the header is clickable. */
 .config-section {
   font-size: 11px;
   font-weight: 700;
@@ -257,10 +257,10 @@
   transform: rotate(90deg);
 }
 
-/* "\u2713 Sparat"-toast - dyker upp direkt under titelraden varje gång
-   backend bekräftat en config_toggle/config_text/config_number
+/* "\u2713 Saved"-toast - appears directly under the title line each time
+   backend has confirmed a config_toggle/config_text/config_number
    (gui_server.py skickar med last_saved = {path, ts}), tonar sedan bort
-   sig själv utan att kräva någon JS-timer. */
+   sig sjÃ¤lv utan att krÃ¤va nÃ¥gon JS-timer. */
 .config-saved-toast {
   display: inline-block;
   font-size: 11px;
@@ -376,9 +376,9 @@
 
 select.config-input {
   cursor: pointer;
-  /* Tvingar en mörk native dropdown-popup (annars ritar webbläsaren
-     den vita/ljusa oavsett "color: inherit" på <select> - det är det
-     som sett ut som "fel färg"). */
+  /* Forces a dark native dropdown popup (otherwise the browser draws
+     the white/light one regardless of "color: inherit" on <select> - this is
+     what has looked like the "wrong color"). */
   color-scheme: dark;
   background-color: rgba(4, 20, 26, 0.9);
   color: var(--bob-text, var(--holo-blue));
@@ -447,3 +447,5 @@ select.config-input option {
   cursor: pointer;
   font-weight: 700;
 }
+
+
