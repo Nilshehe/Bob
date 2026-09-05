@@ -16,6 +16,7 @@ from voice.tts import speak
 import asyncio
 import threading
 from funktioner.queue import event_queue
+from funktioner.memory import memory_saver
 from funktioner import metrics
 from funktioner.io_utils import broadcast_voice_state as _broadcast_voice_state, broadcast_agent_stream as _broadcast_agent_stream, emit as _emit, read_line_cancelable as _read_line_cancelable
 from gui.backend.registry import ToolRegistry
@@ -82,8 +83,6 @@ _voice_mode_changed = threading.Event()
 # orkestreringen (event-loop, agent-anrop, avbrott).
 register_state_callback(_broadcast_voice_state)
 
-from langgraph.checkpoint.memory import InMemorySaver
-memory_saver = InMemorySaver()
 
 
 app_config = load_config()

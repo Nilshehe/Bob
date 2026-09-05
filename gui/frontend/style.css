@@ -334,20 +334,22 @@ html, body {
 #voice-circle {
   --voice-scale: 1;
   --voice-glow: 20px;
-
   position: fixed;
+  top: 50%;
   left: 50%;
-  bottom: 40px;
-  transform: translateX(-50%);
-  width: 90px;
-  height: 90px;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: 55;
+  cursor: pointer;
   transition: opacity 0.25s ease;
 }
 #voice-circle.hidden {
+  /* Bob Circle göms numera bara i extrema fall (t.ex. innan första
+     websocket-anslutningen) - i normal drift är den alltid synlig. */
   opacity: 0;
   pointer-events: none;
 }
@@ -363,13 +365,42 @@ html, body {
 }
 
 #voice-circle-core {
-  width: 46px;
-  height: 46px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(0, 234, 255, 0.55) 0%, rgba(0, 234, 255, 0.08) 70%);
   box-shadow: 0 0 var(--voice-glow) var(--holo-blue);
   transform: scale(var(--voice-scale));
   transition: transform 0.08s linear, box-shadow 0.08s linear;
+}
+
+/* Vila - subtil "andning" när Bob varken lyssnar eller pratar (ROADMAP #5) */
+#voice-circle.idle #voice-circle-core {
+  animation: bob-breathe 3.2s ease-in-out infinite;
+}
+@keyframes bob-breathe {
+  0%, 100% { transform: scale(0.9); box-shadow: 0 0 10px var(--holo-blue); opacity: 0.7; }
+  50%      { transform: scale(1.1); box-shadow: 0 0 40px var(--holo-blue); opacity: 1; }
+}
+
+/* Kort uppljusning när Bob väcks (ROADMAP #5 "lysa upp när Bob vaknar") */
+#voice-circle.woke #voice-circle-core {
+  animation: bob-wake-flash 0.9s ease-out 1;
+}
+@keyframes bob-wake-flash {
+  0%   { transform: scale(1);    box-shadow: 0 0 20px var(--holo-blue); }
+  35%  { transform: scale(1.35); box-shadow: 0 0 70px var(--holo-blue); }
+  100% { transform: scale(1);    box-shadow: 0 0 20px var(--holo-blue); }
+}
+
+/* "Spänner till" när Bob blir aktiv/pratar (ROADMAP #5) */
+#voice-circle.active #voice-circle-ring {
+  border-color: var(--holo-blue);
+  animation: bob-active-ring 1s ease-in-out infinite;
+}
+@keyframes bob-active-ring {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.12); }
 }
 
 #voice-circle.awake #voice-circle-core {
@@ -387,12 +418,141 @@ html, body {
 
 #voice-circle-label {
   position: absolute;
-  bottom: -22px;
+  bottom: -30px;
   font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
   opacity: 0.6;
   white-space: nowrap;
+}
+
+
+/* =====================================================================
+   Bob Circle-meny: Apps / Widgets / Developer Mode (ROADMAP #5)
+   ===================================================================== */
+
+#bob-menu {
+  position: fixed;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%) translateY(12px);
+  width: min(420px, calc(100vw - 48px));
+  max-height: 60vh;
+  background: rgba(2, 8, 14, 0.92);
+  border: 1px solid var(--holo-blue);
+  border-radius: 10px;
+  box-shadow: 0 0 24px var(--holo-glow);
+  backdrop-filter: blur(6px);
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#bob-menu.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+#bob-menu-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 234, 255, 0.3);
+  flex-shrink: 0;
+}
+#bob-menu-tabs button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--bob-muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+#bob-menu-tabs button.active {
+  color: var(--holo-blue);
+  border-bottom: 2px solid var(--holo-blue);
+}
+#bob-menu-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--bob-text);
+}
+.bob-menu-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid rgba(0, 234, 255, 0.12);
+}
+.bob-menu-row:last-child { border-bottom: none; }
+.bob-menu-row button {
+  background: rgba(0, 234, 255, 0.1);
+  border: 1px solid var(--holo-blue);
+  color: var(--holo-blue);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bob-menu-row button:hover { background: rgba(0, 234, 255, 0.25); }
+.bob-menu-empty { opacity: 0.5; font-style: italic; padding: 8px 4px; }
+
+#bob-dev-tool-select {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--holo-blue);
+  color: var(--bob-text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+#bob-dev-tool-desc {
+  opacity: 0.7;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+#bob-dev-args-input {
+  width: 100%;
+  min-height: 70px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 234, 255, 0.4);
+  color: var(--bob-text);
+  font-family: monospace;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+#bob-dev-run-btn {
+  margin-top: 8px;
+  background: rgba(0, 234, 255, 0.25);
+  border: 1px solid var(--holo-blue);
+  color: var(--holo-blue);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+}
+#bob-dev-result {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  padding: 6px;
+  max-height: 140px;
+  overflow-y: auto;
 }
 
 
@@ -657,3 +817,11 @@ html, body {
   font-size: 12px;
   line-height: 1.4;
 }
+/* Small Mode styles */
+body.small-mode #chat-bar,
+body.small-mode #stream-panel,
+body.small-mode #stream-toggle-tab,
+body.small-mode #bob-menu {
+    display: none !important;
+}
+

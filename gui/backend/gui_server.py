@@ -237,6 +237,8 @@ def _handle_event(window_id: str, msg: dict):
             })
     elif mtype == "html_action":
         _handle_html_action(window_id, msg)
+    elif mtype == "bob_menu_action":
+        _handle_bob_menu_action(window_id, msg)
 
 
 def _handle_user_chat_message(content: str):
@@ -545,3 +547,117 @@ def _handle_element_clicked(window_id: str, element_id: str):
     )
 
 
+# ---------------------------------------------------------------------
+# Bob Circle-menyn: Apps / Widgets / Developer Mode (ROADMAP #5)
+# ---------------------------------------------------------------------
+# Alla dessa actions är synkrona, lokala GUI-operationer (läsa state,
+# skapa/ta bort element, anropa ett redan existerande GUI-tool direkt)
+# och behöver inte gå via Bobs event_queue/agent-loop.
+
+def _handle_bob_menu_action(window_id: str, msg: dict):
+    action = msg.get("action")
+
+    if action == "list_apps":
+        # Bara Webbläsaren (html_components "browser") än så länge - fler
+        # appar (ROADMAP #5 "Andra appar som läggs till senare") läggs
+        # till här som fler rader i listan.
+        manager.send(window_id, {
+            "type": "bob_menu_data",
+            "tab": "apps",
+            "apps": [
+                {"id": "browser", "label": "Webbläsare"},
+            ],
+        })
+        return
+
+    if action == "open_app":
+        _bob_menu_open_app(window_id, msg.get("app_id"))
+        return
+
+    if action == "list_widgets":
+        els = state.all_elements_for_window(window_id)
+        widgets = [
+            {"element_id": eid, "type": el.get("type"), "label": el.get("label")}
+            for eid, el in els.items()
+        ]
+        manager.send(window_id, {"type": "bob_menu_data", "tab": "widgets", "widgets": widgets})
+        return
+
+    if action == "remove_widget":
+        element_id = msg.get("element_id")
+        if element_id:
+            state.remove_element(element_id)
+            manager.broadcast({
+                "type": "remove_element",
+                "element_id": element_id,
+                "permanent": True,
+            })
+        return
+
+    if action == "list_dev_tools":
+        from gui.backend.bob_integration import get_langchain_tools
+
+        tools = [
+            {"name": t.name, "description": (t.description or "").strip()[:400]}
+            for t in get_langchain_tools()
+        ]
+        manager.send(window_id, {"type": "bob_menu_data", "tab": "dev", "tools": tools})
+        return
+
+    if action == "run_dev_tool":
+        _bob_menu_run_dev_tool(window_id, msg.get("tool_name"), msg.get("args") or {})
+        return
+
+
+def _bob_menu_open_app(window_id: str, app_id: str):
+    """Öppnar en 'app' i GUI:t. Just nu bara Webbläsaren - återanvänder
+    det befintliga browser-html-komponenten (samma som Bob själv skulle
+    fått genom att anropa create_html_component)."""
+    if app_id != "browser":
+        return
+
+    from gui.backend import gui_tools
+
+    try:
+        gui_tools.create_html_component.func(
+            component="browser",
+            window_id=window_id,
+            x=80,
+            y=80,
+            props={"url": "https://www.google.com", "show_address_bar": True},
+        )
+    except Exception as exc:
+        manager.send(window_id, {"type": "bob_dev_result", "ok": False, "error": str(exc)})
+
+
+def _bob_menu_run_dev_tool(window_id: str, tool_name: str, args: dict):
+    """Developer Mode (ROADMAP #5): kör vilket som helst av Bobs GUI-tools
+    manuellt, utan att gå via Bobs LLM/agent. Notera: detta täcker bara
+    GUI-verktygen (gui_tools.py) - Bobs "vanliga" agent-tools (web_search,
+    memory, code_ai, m.m., definierade i main.py) är en separat lista
+    som inte är trådad hit ännu."""
+    from gui.backend.bob_integration import get_langchain_tools
+
+    tool = next((t for t in get_langchain_tools() if t.name == tool_name), None)
+    if not tool:
+        manager.send(window_id, {"type": "bob_dev_result", "ok": False, "error": f"Okänt tool: {tool_name}"})
+        return
+
+    call_args = dict(args)
+    try:
+        tool_arg_names = tool.args.keys()
+    except Exception:
+        tool_arg_names = []
+    if "window_id" in tool_arg_names and "window_id" not in call_args:
+        call_args["window_id"] = window_id
+
+    try:
+        if getattr(tool, "func", None):
+            result = tool.func(**call_args)
+        else:
+            result = tool.invoke(call_args)
+    except Exception as exc:
+        manager.send(window_id, {"type": "bob_dev_result", "ok": False, "error": str(exc)})
+        return
+
+    manager.send(window_id, {"type": "bob_dev_result", "ok": True, "result": result})

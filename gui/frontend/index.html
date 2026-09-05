@@ -19,11 +19,24 @@
     <button id="chat-send">Skicka</button>
   </div>
 
-  <!-- Röst-cirkel. Syns bara när Voice Mode är på. -->
-  <div id="voice-circle" class="hidden">
+  <!-- Bob Circle. Alltid synlig - Bobs visuella identitet (ROADMAP #5).
+       Ingen ansikte, bara en cirkel som andas i vila, lyser upp/blir
+       aktiv vid tal, och fungerar som knapp för Apps/Widgets/Developer
+       Mode-menyn. -->
+  <div id="voice-circle" class="idle" title="Bob - klicka för meny">
     <div id="voice-circle-ring"></div>
     <div id="voice-circle-core"></div>
-    <div id="voice-circle-label">lyssnar...</div>
+    <div id="voice-circle-label">vilar</div>
+  </div>
+
+  <!-- Bob Circle-menyn: Apps / Widgets / Developer Mode (ROADMAP #5). -->
+  <div id="bob-menu">
+    <div id="bob-menu-tabs">
+      <button type="button" data-tab="apps" class="active">Apps</button>
+      <button type="button" data-tab="widgets">Widgets</button>
+      <button type="button" data-tab="dev">Developer Mode</button>
+    </div>
+    <div id="bob-menu-body"></div>
   </div>
 
   <!-- Alltid synlig flik för att döma/visa live-svarswidgeten. Ligger

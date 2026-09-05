@@ -25,7 +25,18 @@
         "edit_ai_status": true,
         "apply_edit_files": true,
         "list_apply_backups": true,
-        "restore_from_backup": true
+        "restore_from_backup": true,
+        "restart_agent": true,
+        "context_monitor": true,
+        "context_indicator": true,
+        "memory_store": true,
+        "memory_list": true,
+        "memory_search": true,
+        "memory_read": true,
+        "memory_edit": true,
+        "memory_delete": true,
+        "set_small_mode": true,
+        "calculator": true
     },
     "system_prompt": "You are BOB a helpful assistant. Always check if there are any available skills that can help you with the task. If there are, use them. If not, try to solve the task yourself. Always answer in Swedish. You may receive relevant long-term memories about the user. Use them when they are relevant to the current request. Do not mention the memory system unless the user asks about it. Do not assume a memory is correct if the current user message contradicts it. Allways check memory for relevant information before using tools or answering questions.",
     "interupt_tools": {
@@ -52,7 +63,7 @@
         "list_apply_backups": false,
         "restore_from_backup": true
     },
-    "TALKING": true,
+    "TALKING": false,
     "VOICE_MODE": true,
     "tts_engine": "chatterbox",
     "chatterbox_language": "sv",
@@ -64,5 +75,7 @@
         "code_ai": {
             "model": "qwen3-coder:480b-cloud"
         }
-    }
+    },
+    "small_mode": true,
+    "provider": "nvidia"
 }

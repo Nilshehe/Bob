@@ -78,6 +78,7 @@ def _fetch_ollama_models():
 # döpa om den till vad .env-variabeln faktiskt heter hos dem
 # (config.json: api_key_envs.<provider>).
 API_PROVIDERS = {
+    "nvidia": {"label": "NVIDIA NIM", "default_key_env": "NVIDIA_API_KEY"},
     "ollama": {"label": "Ollama (lokalt)", "default_key_env": None},
     "openai": {"label": "OpenAI", "default_key_env": "OPENAI_API_KEY"},
     "anthropic": {"label": "Anthropic", "default_key_env": "ANTHROPIC_API_KEY"},
@@ -92,6 +93,7 @@ API_PROVIDERS = {
 # Providers som har ett OpenAI-kompatibelt GET /models-listan-API - vi
 # kan använda samma koll-logik för alla dessa (se check_model()).
 _OPENAI_STYLE_BASE_URLS = {
+    "nvidia": "https://integrate.api.nvidia.com/v1",
     "openai": "https://api.openai.com/v1",
     "groq": "https://api.groq.com/openai/v1",
     "mistralai": "https://api.mistral.ai/v1",
