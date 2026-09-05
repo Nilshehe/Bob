@@ -2,9 +2,9 @@
   --holo-blue: #00eaff;
   --holo-glow: rgba(0, 234, 255, 0.35);
 
-  /* Bobs centrala tema (theme.py) - default innan theme_state kommer in
-     Ã¶ver websocket vid anslutning. app.js skriver Ã¶ver dessa (och
-     --holo-blue/--holo-glow ovan) live nÃ¤r temat byts. */
+  /* Bob's central theme (theme.py) - default before theme_state arrives
+     over the websocket on connect. app.js overwrites these (and
+     --holo-blue/--holo-glow above) live when the theme changes. */
   --bob-accent: var(--holo-blue);
   --bob-accent-hue: 189deg;
   --bob-background: #04141a;
@@ -348,8 +348,8 @@ html, body {
   transition: opacity 0.25s ease;
 }
 #voice-circle.hidden {
-  /* Bob Circle gÃ¶ms numera bara i extrema fall (t.ex. innan fÃ¶rsta
-     WebSocket connection) - i normal operation Ã¤r den alltid synlig. */
+  /* Bob Circle is nowadays only hidden in extreme cases (e.g. before the first
+     WebSocket connection) - in normal operation it's always visible. */
   opacity: 0;
   pointer-events: none;
 }

@@ -6,30 +6,30 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/html_widgets.css">
 <!-- Three.js for 3D/hologram rendering. Feel free to use local copies in
-     /frontend/vendor/ om Nils vill kÃ¶ra helt offline. -->
+     /frontend/vendor/ if Nils wants to run fully offline. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
   <div id="canvas"></div>
 
-  <!-- Permanent chatt-input. GÃ¶ms automatiskt nÃ¤r Voice Mode Ã¤r pÃ¥. -->
+  <!-- Permanent chat input. Hides automatically when Voice Mode is on. -->
   <div id="chat-bar">
     <input id="chat-input" type="text" placeholder="Write to Bob..." autocomplete="off">
     <button id="chat-send">Send</button>
   </div>
 
-  <!-- Bob Circle. Alltid synlig - Bobs visuella identitet (ROADMAP #5).
-       Ingen ansikte, bara en cirkel som andas i vila, lyser upp/blir
-       aktiv vid tal, och fungerar som knapp fÃ¶r Apps/Widgets/Developer
-       Mode-menyn. -->
+  <!-- Bob Circle. Always visible - Bob's visual identity (ROADMAP #5).
+       No face, just a circle that breathes at rest, lights up/becomes
+       active when speaking, and acts as a button for the Apps/Widgets/Developer
+       Mode menu. -->
   <div id="voice-circle" class="idle" title="Bob - click for menu">
     <div id="voice-circle-ring"></div>
     <div id="voice-circle-core"></div>
     <div id="voice-circle-label">idle</div>
   </div>
 
-  <!-- Bob Circle-menyn: Apps / Widgets / Developer Mode (ROADMAP #5). -->
+  <!-- Bob Circle menu: Apps / Widgets / Developer Mode (ROADMAP #5). -->
   <div id="bob-menu">
     <div id="bob-menu-tabs">
       <button type="button" data-tab="apps" class="active">Apps</button>
@@ -39,19 +39,19 @@
     <div id="bob-menu-body"></div>
   </div>
 
-  <!-- Alltid synlig flik fÃ¶r att dÃ¶ma/visa live-svarswidgeten. Ligger
-       UTANFÃ–R #stream-panel med flit: nÃ¤r panelen Ã¤r gÃ¶md (visible=false)
-       fÃ¥r man annars ingen vÃ¤g tillbaka in, eftersom kugghjulet ocksÃ¥
-       gÃ¶mdes med resten av panelen. -->
-  <button id="stream-toggle-tab" title="Show/hide live panel">â—ˆ live</button>
+  <!-- Always-visible tab to hide/show the live response widget. Placed
+       OUTSIDE #stream-panel on purpose: when the panel is hidden (visible=false)
+       there would otherwise be no way back in, since the gear icon was also
+       hidden along with the rest of the panel. -->
+  <button id="stream-toggle-tab" title="Show/hide live panel">◈ live</button>
 
-  <!-- Live-svarswidget: visar textstrÃ¶m, resonemang, tool calls, interrupts. -->
+  <!-- Live response widget: shows text stream, reasoning, tool calls, interrupts. -->
   <div id="stream-panel">
     <div id="stream-header">
-      <span>BOB â€” live</span>
+      <span>BOB — live</span>
       <div id="stream-header-buttons">
-        <button id="stream-settings-btn" title="InstÃ¤llningar">âš™</button>
-        <button id="stream-hide-btn" title="GÃ¶m helt (Ctrl+Shift+L fÃ¶r att ta fram igen)">âœ•</button>
+        <button id="stream-settings-btn" title="Settings">⚙</button>
+        <button id="stream-hide-btn" title="Hide completely (Ctrl+Shift+L to bring back)">✕</button>
       </div>
     </div>
     <div id="stream-settings">
@@ -60,13 +60,13 @@
       <label><input type="checkbox" id="show-tool_call_chunk" checked> Tool calls</label>
       <label><input type="checkbox" id="show-interrupt" checked> Interrupts</label>
       <div id="stream-window-filter">
-        <label><input type="checkbox" id="show-all-windows" checked> Alla fÃ¶nster</label>
+        <label><input type="checkbox" id="show-all-windows" checked> All windows</label>
         <div id="stream-window-list"></div>
       </div>
       <button id="stream-clear-btn">Clear</button>
     </div>
     <div id="stream-body"></div>
-    <div id="stream-resize-handle" title="Dra fÃ¶r att Ã¤ndra storlek"></div>
+    <div id="stream-resize-handle" title="Drag to resize"></div>
   </div>
 
   <script src="/static/app.js"></script>

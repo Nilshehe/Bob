@@ -65,7 +65,7 @@
       "visible": true,
       "props": {
         "variable": "Voice Mode",
-        "value": true
+        "value": false
       }
     },
     "code_ai_monitor": {

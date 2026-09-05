@@ -1,16 +1,16 @@
-﻿// app.js â€” Bob GUI runtime.
+﻿// app.js — Bob GUI runtime.
 
 //
 
 // Backend:
 
-//   msg.type         = kommando
+//   msg.type         = command
 
-//   msg.element_type = elementtyp
+//   msg.element_type = element type
 
 //
 
-// Exempel:
+// Example:
 
 // {
 
@@ -84,7 +84,7 @@ ws.onmessage = (evt) => {
 
     console.error(
 
-      "Bob GUI: kunde inte lÃ¤sa WebSocket-meddelande:",
+      "Bob GUI: could not read WebSocket message:",
 
       err
 
@@ -102,7 +102,7 @@ ws.onclose = () => {
 
   console.warn(
 
-    "Bob GUI: websocket stÃ¤ngd"
+    "Bob GUI: websocket closed"
 
   );
 
@@ -360,13 +360,13 @@ function sendEvent(payload) {
 
 // ---------------------------------------------------------------------
 
-// SÃ¤tter Bobs tema som CSS-variabler pÃ¥ :root. --holo-blue/--holo-glow
+// Sets Bob's theme as CSS variables on :root. --holo-blue/--holo-glow
 
-// (de gamla, hÃ¥rdkodade variablerna som resten av style.css redan
+// (the old, hardcoded variables the rest of style.css already uses)
 
-// anvÃ¤nder) pekas om till samma accent sÃ¥ att BEFINTLIGA widgets ocksÃ¥
+// get repointed to the same accent so EXISTING widgets also follow
 
-// fÃ¶ljer med nÃ¤r temat byts, utan att style.css behÃ¶vde skrivas om.
+// along when the theme changes, without style.css needing a rewrite.
 
 
 
@@ -414,7 +414,7 @@ function applyThemeState(t) {
 
 
 
-  // BakÃ¥tkompatibilitet: gamla widgets (punkt 45).
+  // Backward compatibility: old widgets (point 45).
 
   root.setProperty("--holo-blue", t.accent);
 
@@ -438,7 +438,7 @@ function getElementType(data) {
 
 
 
-  // Nya create_element-meddelanden
+  // New create_element messages
 
   if (data.element_type) {
 
@@ -448,7 +448,7 @@ function getElementType(data) {
 
 
 
-  // BakÃ¥tkompatibilitet fÃ¶r sync
+  // Backward compatibility for sync
 
   return data.type;
 
@@ -506,7 +506,7 @@ function createElementDom(
 
     console.warn(
 
-      "Bob GUI: element saknar element_type:",
+      "Bob GUI: element is missing element_type:",
 
       data
 
@@ -774,15 +774,15 @@ function createElementDom(
 
 // ---------------------------------------------------------------------
 
-// Settings-widget (element-typen "config_widget") - byggs helt frÃ¥n
+// Settings widget (element type "config_widget") - built entirely from
 
-// props (config.json-innehÃ¥ll + ev. ollama-modellista + ev.
+// props (config.json content + optional ollama model list + optional
 
-// has_api_key/check_result), ingen server-HTML inblandad. Anropas bÃ¥de
+// has_api_key/check_result), no server-side HTML involved. Called both
 
-// vid skapande (buildBody) och vid uppdatering (updateElementDom) sÃ¥
+// on creation (buildBody) and on update (updateElementDom) so that
 
-// att provider-byte, "testa modell"-resultat osv. speglas live.
+// provider changes, "test model" results etc. are reflected live.
 
 // ---------------------------------------------------------------------
 
@@ -798,7 +798,7 @@ const CONFIG_AUTO_EXCLUDED = new Set([
 
 const CONFIG_PROVIDERS = {
 
-  ollama: "Ollama (lokalt)",
+  ollama: "Ollama (local)",
 
   openai: "OpenAI",
 
@@ -820,39 +820,39 @@ const CONFIG_PROVIDERS = {
 
 
 
-// Chatterbox stÃ¶djer dessa sprÃ¥kkoder (voice/tts_chatterbox.py:
+// Chatterbox supports these language codes (voice/tts_chatterbox.py:
 
-// SUPPORTED_LANGUAGES) - dubblerad hÃ¤r som {kod: visningsnamn} eftersom
+// SUPPORTED_LANGUAGES) - duplicated here as {code: display name} since
 
-// frontend inte kan importera frÃ¥n Python-filen.
+// the frontend can't import from the Python file.
 
 const CHATTERBOX_LANGUAGES = {
 
-  sv: "Svenska", en: "Engelska", de: "Tyska", es: "Spanska",
+  sv: "Swedish", en: "English", de: "German", es: "Spanish",
 
-  fr: "French", it: "Italian", nl: "NederlÃ¤ndska", pl: "Polish",
+  fr: "French", it: "Italian", nl: "Dutch", pl: "Polish",
 
-  pt: "Portugisiska", ru: "Ryska", tr: "Turkiska", ar: "Arabiska",
+  pt: "Portuguese", ru: "Russian", tr: "Turkish", ar: "Arabic",
 
-  da: "Danska", el: "Grekiska", fi: "Finska", he: "Hebreiska",
+  da: "Danish", el: "Greek", fi: "Finnish", he: "Hebrew",
 
-  hi: "Hindi", ja: "Japanska", ko: "Koreanska", ms: "Malajiska",
+  hi: "Hindi", ja: "Japanese", ko: "Korean", ms: "Malay",
 
-  no: "Norska", sw: "Swahili", zh: "Kinesiska",
+  no: "Norwegian", sw: "Swahili", zh: "Chinese",
 
 };
 
 
 
-// Kommer ihÃ¥g vilka sektioner (kort) som Ã¤r utfÃ¤llda per settings-
+// Remembers which sections (cards) are expanded per settings
 
-// widget-id och sektionsnamn - annars skulle EN toggle-klick (som
+// widget-id and section name - otherwise a SINGLE toggle click (which
 
-// bygger om hela widgeten frÃ¥n scratch, se renderConfigWidget) stÃ¤nga
+// rebuilds the whole widget from scratch, see renderConfigWidget) would
 
-// ihop alla kort igen varje gÃ¥ng. Persisterar bara fÃ¶r sessionen
+// collapse all cards again every time. Only persists for the session
 
-// (modul-scope, inte config.json) - det Ã¤r UI-tillstÃ¥nd, inte data.
+// (module scope, not config.json) - it's UI state, not data.
 
 const CONFIG_SECTION_OPEN = new Map();
 
@@ -894,9 +894,9 @@ function renderConfigWidget(body, props, id) {
 
   // check_results: {main: {...}, approval: {...}, edit_ai: {...}, ...}
 
-  // - separat frÃ¥n gamla check_result (main-modellen), sÃ¥ varje
+  // - separate from the old check_result (the main model), so each
 
-  // agents "testa modell"-knapp visar sitt eget resultat.
+  // agent's "test model" button shows its own result.
 
   const checkResults = p.check_results || {};
 
@@ -924,15 +924,15 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // "Sparat"-bekrÃ¤ftelse - dyker upp direkt efter en Ã¤ndring (backend
+  // "Saved" confirmation - appears right after a change (backend
 
-  // skickar last_saved = {path, ts} pÃ¥ varje config_toggle/config_text/
+  // sends last_saved = {path, ts} on every config_toggle/config_text/
 
-  // config_number) och tonar bort sig sjÃ¤lv via CSS-animationen
+  // config_number) and fades itself out via the CSS animation
 
-  // config-toast-fade. Utan den hÃ¤r gick det inte att se om en Ã¤ndring
+  // config-toast-fade. Without this there was no way to see whether a
 
-  // faktiskt slagit igenom, bara att widgeten byggdes om.
+  // change actually went through, only that the widget got rebuilt.
 
   if (lastSaved && lastSaved.ts) {
 
@@ -940,11 +940,11 @@ function renderConfigWidget(body, props, id) {
 
     toast.className = "config-saved-toast";
 
-    toast.textContent = "\u2713 Sparat";
+    toast.textContent = "\u2713 Saved";
 
-    // Ny animation varje gÃ¥ng, Ã¤ven om texten/klassen Ã¤r samma som
+    // New animation every time, even if the text/class is the same as
 
-    // fÃ¶rra gÃ¥ngen - annars spelar CSS-animationen inte om.
+    // last time - otherwise the CSS animation won't replay.
 
     toast.style.animation = "none";
 
@@ -960,7 +960,7 @@ function renderConfigWidget(body, props, id) {
 
   closeBtn.className = "config-close-btn";
 
-  closeBtn.title = "StÃ¤ng";
+  closeBtn.title = "Close";
 
   closeBtn.textContent = "\u2715";
 
@@ -980,15 +980,15 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // Grupperade "kort" (iOS Settings-mÃ¶nster), nu hopfÃ¤llbara som
+  // Grouped "cards" (iOS Settings pattern), now collapsible like
 
-  // dropdown-listor - varje addSection() Ã¶ppnar ett nytt kort och alla
+  // dropdown lists - every addSection() opens a new card and all
 
-  // rader efter den (addToggle/addTextInput/manuellt tillagda rader)
+  // rows after it (addToggle/addTextInput/manually added rows)
 
-  // landar i det kortet tills nÃ¤sta addSection() anropas. Rubriken Ã¤r
+  // land in that card until the next addSection() call. The heading is
 
-  // klickbar och togglar om kortet (config-group) visas eller inte.
+  // clickable and toggles whether the card (config-group) is shown.
 
   let currentGroup = root;
 
@@ -1010,7 +1010,7 @@ function renderConfigWidget(body, props, id) {
 
     chevron.className = "config-section-chevron";
 
-    chevron.textContent = "\u25B8"; // â–¸, roteras till â–¾ via CSS nÃ¤r .open
+    chevron.textContent = "\u25B8"; // ▸, rotated to ▾ via CSS when .open
 
 
 
@@ -1116,15 +1116,17 @@ function renderConfigWidget(body, props, id) {
 
     toggle.addEventListener("click", () => {
 
-      // Optimistisk UI: flippa direkt istÃ¤llet fÃ¶r att vÃ¤nta pÃ¥
+      // Optimistic UI: flip immediately instead of waiting for
 
-      // serverns update_element-svar (som annars gÃ¶r togglen kÃ¤nnas
+      // the server's update_element response (which otherwise makes the
 
-      // trÃ¶gflutten sÃ¥ fort websocket-rundturen tar mer Ã¤n ett par ms).
+      // toggle feel sluggish as soon as the websocket round trip takes
 
-      // Kommer alltid att skrivas Ã¶ver av den riktiga renderConfigWidget-
+      // more than a couple of ms). Always gets overwritten by the real
 
-      // renderingen nÃ¤r svaret kommer, sÃ¥ den blir aldrig fel "pÃ¥ riktigt".
+      // renderConfigWidget render once the response arrives, so it never
+
+      // stays "actually wrong".
 
       const next = !toggle.classList.contains("on");
 
@@ -1202,17 +1204,17 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // Ã…teranvÃ¤ndbar provider+modell-vÃ¤ljare, anvÃ¤nds bÃ¥de fÃ¶r
+  // Reusable provider+model picker, used both for
 
-  // huvud-AI:n och fÃ¶r varje underagent (Approval/Edit/Research/
+  // the main AI and for every sub-agent (Approval/Edit/Research/
 
-  // Code AI) sÃ¥ de kan kÃ¶ra olika modeller - och olika providers.
+  // Code AI) so they can run different models - and different providers.
 
-  // agentPath = null -> huvudmodellen (config.provider/config.model,
+  // agentPath = null -> the main model (config.provider/config.model,
 
-  // toppnivÃ¥, bakÃ¥tkompatibelt). agentPath = "agents.<key>" ->
+  // top-level, backward compatible). agentPath = "agents.<key>" ->
 
-  // underagent, sparas under config.agents.<key>.provider/model.
+  // sub-agent, saved under config.agents.<key>.provider/model.
 
   function addModelPicker(agentPath, agentCfg, resultKey, defaultModelHint) {
 
@@ -1358,7 +1360,7 @@ function renderConfigWidget(body, props, id) {
 
         hint.className = "config-hint missing";
 
-        hint.textContent = "Hittar ingen lokal Ollama (kÃ¶rs den pÃ¥ :11434?)";
+        hint.textContent = "Can't find a local Ollama (is it running on :11434?)";
 
         currentGroup.appendChild(hint);
 
@@ -1370,7 +1372,7 @@ function renderConfigWidget(body, props, id) {
 
       const envValue = (config.api_key_envs && config.api_key_envs[currentProvider]) || "";
 
-      addTextInput(envPath, ".env-variabel fÃ¶r API-nyckel", envValue, {
+      addTextInput(envPath, ".env variable for API key", envValue, {
 
         placeholder: currentProvider.toUpperCase() + "_API_KEY",
 
@@ -1392,9 +1394,9 @@ function renderConfigWidget(body, props, id) {
 
       keyHint.textContent = hasKey
 
-        ? "\u2713 Nyckel hittad i .env"
+        ? "\u2713 Key found in .env"
 
-        : "\u2717 Ingen nyckel hittad i .env under det namnet";
+        : "\u2717 No key found in .env under that name";
 
       currentGroup.appendChild(keyHint);
 
@@ -1418,13 +1420,13 @@ function renderConfigWidget(body, props, id) {
 
     checkBtn.className = "config-check-model";
 
-    checkBtn.textContent = "TESTA OM MODELLEN FINNS";
+    checkBtn.textContent = "TEST IF THE MODEL EXISTS";
 
     checkBtn.addEventListener("click", () => {
 
       checkBtn.disabled = true;
 
-      checkBtn.textContent = "TESTAR...";
+      checkBtn.textContent = "TESTING...";
 
       sendConfigEvent("config_check_model", { agent: resultKey });
 
@@ -1486,15 +1488,15 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // --- SETTINGS: auto-genererad frÃ¥n alla Ã¶vriga toppnivÃ¥-nycklar i
+  // --- SETTINGS: auto-generated from all other top-level keys in
 
-  // config.json - nya nycklar dyker upp hÃ¤r av sig sjÃ¤lva, ingen
+  // config.json - new keys show up here on their own, no
 
-  // kodÃ¤ndring behÃ¶vs. Typ avgÃ¶rs frÃ¥n vÃ¤rdets JS-typ: bool -> toggle,
+  // code change needed. Type is decided from the value's JS type: bool -> toggle,
 
-  // number -> nummerfÃ¤lt, lÃ¥ng/flerradig strÃ¤ng -> textarea, annars
+  // number -> number field, long/multi-line string -> textarea, otherwise
 
-  // ett vanligt textfÃ¤lt.
+  // a plain text field.
 
   addSection("SETTINGS");
 
@@ -1526,7 +1528,7 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // --- TTS ENGINE: bara relevant/synlig nÃ¤r TALKING Ã¤r pÃ¥ ---
+  // --- TTS ENGINE: only relevant/visible when TALKING is on ---
 
   if (config.TALKING) {
 
@@ -1538,7 +1540,7 @@ function renderConfigWidget(body, props, id) {
 
     const label = document.createElement("span");
 
-    label.textContent = "RÃ¶stmotor";
+    label.textContent = "Voice engine";
 
     const select = document.createElement("select");
 
@@ -1576,11 +1578,11 @@ function renderConfigWidget(body, props, id) {
 
 
 
-    // RÃ¶st + sprÃ¥k Ã¤r bara relevanta fÃ¶r Chatterbox - Piper har en
+    // Voice + language are only relevant for Chatterbox - Piper has a
 
-    // enda inbyggd svensk rÃ¶st (voice/tts.py: MODEL = "sv_SE-nst-
+    // single built-in Swedish voice (voice/tts.py: MODEL = "sv_SE-nst-
 
-    // medium.onnx") och tar inget val.
+    // medium.onnx") and doesn't take a choice.
 
     if (currentEngine === "chatterbox") {
 
@@ -1590,7 +1592,7 @@ function renderConfigWidget(body, props, id) {
 
       const voiceLabel = document.createElement("span");
 
-      voiceLabel.textContent = "RÃ¶st";
+      voiceLabel.textContent = "Voice";
 
       const voiceSelect = document.createElement("select");
 
@@ -1602,7 +1604,7 @@ function renderConfigWidget(body, props, id) {
 
       defaultOpt.value = "";
 
-      defaultOpt.textContent = "(Chatterbox default-rÃ¶st)";
+      defaultOpt.textContent = "(Chatterbox default voice)";
 
       if (!config.chatterbox_voice) defaultOpt.selected = true;
 
@@ -1646,7 +1648,7 @@ function renderConfigWidget(body, props, id) {
 
         hint.className = "config-hint missing";
 
-        hint.textContent = "Inga rÃ¶stfiler i voice/voices/ - lÃ¤gg dit en .wav (5-15 sek) fÃ¶r rÃ¶stkloning.";
+        hint.textContent = "No voice files in voice/voices/ - drop a .wav (5-15 sec) there for voice cloning.";
 
         currentGroup.appendChild(hint);
 
@@ -1660,7 +1662,7 @@ function renderConfigWidget(body, props, id) {
 
       const langLabel = document.createElement("span");
 
-      langLabel.textContent = "SprÃ¥k";
+      langLabel.textContent = "Language";
 
       const langSelect = document.createElement("select");
 
@@ -1708,11 +1710,11 @@ function renderConfigWidget(body, props, id) {
 
 
 
-  // --- AI PER AGENT: Approval/Edit/Research/Code AI kan var och en
+  // --- AI PER AGENT: Approval/Edit/Research/Code AI can each
 
-  // kÃ¶ra en egen provider/modell, oberoende av huvud-AI:n och av
+  // run their own provider/model, independent of the main AI and of
 
-  // varandra. Tomt fÃ¤lt = Ã¤rver providerns default-modell (se
+  // each other. Empty field = inherits the provider's default model (see
 
   // config_manager.get_agent_model).
 
@@ -2198,7 +2200,7 @@ function buildBody(
 
     area.value = props.text || "";
 
-    area.placeholder = "Skriv hÃ¤r...";
+    area.placeholder = "Write here...";
 
 
 
@@ -2242,19 +2244,19 @@ function buildBody(
 
 // ---------------------------------------------------------------------
 
-// HTML-element - actions (punkt 10, 48) och lokal kamera (punkt 57A)
+// HTML elements - actions (point 10, 48) and local camera (point 57A)
 
 // ---------------------------------------------------------------------
 
-// Interaktion i fri/mall-HTML gÃ¥r via data-bob-action (+ valfritt
+// Interaction in free/template HTML goes through data-bob-action (+ optional
 
-// data-bob-value) istÃ¤llet fÃ¶r inline-JS (som saneras bort i backend
+// data-bob-value) instead of inline JS (which gets sanitized out on the
 
-// Ã¤ndÃ¥, se html_sanitizer.py). Klick hanteras fÃ¶r det mesta, men
+// backend anyway, see html_sanitizer.py). Clicks are handled for most of it, but
 
-// input/textarea/select skickar pÃ¥ "change" istÃ¤llet sÃ¥ man inte
+// input/textarea/select send on "change" instead so we don't
 
-// bombarderar Bob med ett event per tangenttryck.
+// bombard Bob with an event per keystroke.
 
 
 
@@ -2334,7 +2336,7 @@ function applyCameraFeeds(container) {
 
       console.warn(
 
-        "Bob GUI: kamera krÃ¤ver https eller localhost - stÃ¶ds inte hÃ¤r."
+        "Bob GUI: camera requires https or localhost - not supported here."
 
       );
 
@@ -2356,7 +2358,7 @@ function applyCameraFeeds(container) {
 
       .catch((err) => {
 
-        console.warn("Bob GUI: kunde inte starta kameran:", err);
+        console.warn("Bob GUI: could not start the camera:", err);
 
       });
 
@@ -2370,13 +2372,13 @@ function applyCameraFeeds(container) {
 
 // ---------------------------------------------------------------------
 
-// Graf (diagram/graf-widget) - ren canvas, inget externt bibliotek.
+// Graph (chart/graph widget) - plain canvas, no external library.
 
-// HÃ¥ller en lokal punktbuffert per serie (seedad frÃ¥n backend-historiken
+// Keeps a local point buffer per series (seeded from the backend history
 
-// vid create_element/sync, sedan pÃ¥fylld live av metrics_tick) och ritar
+// on create_element/sync, then filled live by metrics_tick) and draws
 
-// bara punkterna inom det valda tidsintervallet.
+// only the points within the selected time range.
 
 // ---------------------------------------------------------------------
 
@@ -2482,9 +2484,9 @@ function buildGraphDom(id, props) {
 
 
 
-  // Rita om vid storleksÃ¤ndring av elementet (resize-handtaget Ã¤ndrar
+  // Redraw on resize of the element (the resize handle only changes
 
-  // bara CSS-storlek pÃ¥ wrappern, canvasens pixelbuffert mÃ¥ste synkas).
+  // the wrapper's CSS size, the canvas's pixel buffer must be re-synced).
 
   requestAnimationFrame(() => drawGraph(id));
 
@@ -2582,7 +2584,7 @@ function drawGraph(id) {
 
     ctx.font = "11px monospace";
 
-    ctx.fillText("VÃ¤ntar pÃ¥ data...", 6, h / 2);
+    ctx.fillText("Waiting for data...", 6, h / 2);
 
     return;
 
@@ -2682,7 +2684,7 @@ function handleMetricsTick(msg) {
 
     g.seriesNames.forEach((name) => {
 
-      // Serienamnen fÃ¶r tokens fÃ¶ljer alltid "tokens:<agent>".
+      // Series names for tokens always follow "tokens:<agent>".
 
       if (!name.startsWith("tokens:")) return;
 
@@ -2706,9 +2708,9 @@ function handleMetricsTick(msg) {
 
 
 
-  // Stortext-widgets bundna till en Token Usage-variabel uppdateras live
+  // Big-text widgets bound to a Token Usage variable get updated live
 
-  // samma vÃ¤g, utan att behÃ¶va en separat polling-loop i frontend.
+  // the same way, without needing a separate polling loop in the frontend.
 
   Object.entries(elements).forEach(([id, el]) => {
 
@@ -2778,11 +2780,11 @@ function applyWhiteboardProps(id, props) {
 
 
 
-  // Skriv inte Ã¶ver det anvÃ¤ndaren just nu hÃ¥ller pÃ¥ att skriva i den
+  // Don't overwrite what the user is currently typing in this
 
-  // hÃ¤r rutan - annars rycks markÃ¶ren undan varje gÃ¥ng Bob (eller ett
+  // box - otherwise the cursor gets yanked away every time Bob (or
 
-  // annat fÃ¶nster) uppdaterar samma whiteboard.
+  // another window) updates the same whiteboard.
 
   if (document.activeElement === area) return;
 
@@ -2810,7 +2812,7 @@ function applyWhiteboardProps(id, props) {
 
 function formatToggleValue(value) {
 
-  return value ? "PÃ…" : "AV";
+  return value ? "ON" : "OFF";
 
 }
 
@@ -4382,7 +4384,7 @@ function loadModel(
 
       console.error(
 
-        "Kunde inte ladda 3D-modell:",
+        "Could not load 3D model:",
 
         err
 
@@ -4722,7 +4724,7 @@ chatInput.addEventListener("keydown", (e) => {
 
 // =======================================================================
 
-// Voice state: gÃ¶m chatt-input, driv vÃ¤ckningscirkeln
+// Voice state: hide chat input, drive the wake circle
 
 // =======================================================================
 
@@ -4734,7 +4736,7 @@ const voiceCircleLabel = document.getElementById("voice-circle-label");
 
 
 
-// Enkel jÃ¤mnande (sÃ¥ cirkeln inte hackar mellan varje ljudsampel).
+// Simple smoothing (so the circle doesn't stutter between audio samples).
 
 let smoothedLevel = 0;
 
@@ -4905,9 +4907,9 @@ function handleVoiceState(msg) {
 
 
 
-  // Bob Circle Ã¤r ALLTID synlig nu (ROADMAP #5) - gÃ¶ms inte lÃ¤ngre bara
+  // Bob Circle is ALWAYS visible now (ROADMAP #5) - no longer hidden
 
-  // fÃ¶r att Voice Mode Ã¤r av. I textlÃ¤ge visar den bara "idle"
+  // just because Voice Mode is off. In text mode it just shows "idle"
 
   // (idle-breathing); in Voice Mode the awake/listening classes take over.
 
@@ -4927,7 +4929,7 @@ function handleVoiceState(msg) {
 
     : msg.awake ? "listening..." :
 
-      msg.listening ? "vÃ¤ntar pÃ¥ \u201eBob\u201d..." :
+      msg.listening ? "waiting for \u201eBob\u201d..." :
 
       "idle";
 
@@ -4965,7 +4967,7 @@ function handleVoiceState(msg) {
 
 // =======================================================================
 
-// Bob Circle-menyn: Apps / Widgets / Developer Mode (ROADMAP #5)
+// Bob Circle menu: Apps / Widgets / Developer Mode (ROADMAP #5)
 
 // =======================================================================
 
@@ -5061,7 +5063,7 @@ bobMenuTabs.addEventListener("click", (e) => {
 
 function loadBobMenuTab(tab) {
 
-  bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">laddar...</div>";
+  bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">loading...</div>";
 
   if (tab === "apps") {
 
@@ -5113,7 +5115,7 @@ function renderBobApps(apps) {
 
   if (!apps.length) {
 
-    bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">Inga appar tillgÃ¤ngliga.</div>";
+    bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">No apps available.</div>";
 
     return;
 
@@ -5125,7 +5127,7 @@ function renderBobApps(apps) {
 
       <span>${a.label}</span>
 
-      <button type="button" data-app="${a.id}">Ã–ppna</button>
+      <button type="button" data-app="${a.id}">Open</button>
 
     </div>
 
@@ -5188,7 +5190,7 @@ function renderBobDevList() {
 
   if (!bobDevTools.length) {
 
-    bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">Inga tools hittades.</div>";
+    bobMenuBody.innerHTML = "<div class=\"bob-menu-empty\">No tools found.</div>";
 
     return;
 
@@ -5204,7 +5206,7 @@ function renderBobDevList() {
 
     <textarea id="bob-dev-args-input" placeholder='{"key": "value"}'>{}</textarea>
 
-    <button type="button" id="bob-dev-run-btn">KÃ¶r</button>
+    <button type="button" id="bob-dev-run-btn">Run</button>
 
     <div id="bob-dev-result"></div>
 
@@ -5248,7 +5250,7 @@ function renderBobDevList() {
 
     }
 
-    document.getElementById("bob-dev-result").textContent = "kÃ¶r...";
+    document.getElementById("bob-dev-result").textContent = "running...";
 
     sendEvent({ type: "bob_menu_action", action: "run_dev_tool", tool_name: select.value, args });
 
@@ -5324,9 +5326,9 @@ const STREAM_TYPES = ["text", "reasoning", "tool_call_chunk", "interrupt"];
 
 // restart exactly like windows/elements. This flag prevents our
 
-// eget "change"-event pÃ¥ en checkbox skickas tillbaka till servern nÃ¤r det
+// own "change" event on a checkbox from being sent back to the server when it
 
-// egentligen bara var vi som applicerade ett inkommande state-meddelande.
+// was really just us applying an incoming state message.
 
 let applyingRemotePanelState = false;
 
@@ -5552,7 +5554,7 @@ function renderWindowCheckboxes() {
 
       " " + (w.title || w.window_id) +
 
-      (w.window_id === windowId ? " (det hÃ¤r fÃ¶nstret)" : "")
+      (w.window_id === windowId ? " (this window)" : "")
 
     ));
 
@@ -5792,7 +5794,7 @@ window.addEventListener("keydown", (e) => {
 
 // regular GUI elements, but customized for the panel because it is not
 
-// Ã¤r ett element i "elements"-registret och styrs via
+// an element in the "elements" registry and is controlled via
 
 // stream_panel_updated/stream_panel_state instead of
 
@@ -5840,7 +5842,7 @@ window.addEventListener("keydown", (e) => {
 
 
 
-    // Panelen Ã¤r CSS-positionerad med "right" som standard. Byt till
+    // The panel is CSS-positioned with "right" by default. Switch to
 
     // left/top control so it can actually be dragged freely.
 
@@ -6046,7 +6048,7 @@ function handleAgentStream(msg) {
 
   // Text/reasoning/Approval AI streams token by token.
 
-  // Klistra ihop tokens i samma rad.
+  // Glue tokens together on the same line.
 
   if (
 

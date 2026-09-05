@@ -194,7 +194,12 @@ async def ws_endpoint(websocket: WebSocket, window_id: str):
     try:
         while True:
             raw = await websocket.receive_text()
-            _handle_event(window_id, json.loads(raw))
+            try:
+                _handle_event(window_id, json.loads(raw))
+            except Exception as exc:
+                import traceback
+                print(f"\033[31mError handling GUI event: {exc}\033[0m")
+                traceback.print_exc()
     except WebSocketDisconnect:
         manager.disconnect(window_id)
 

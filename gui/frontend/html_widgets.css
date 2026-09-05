@@ -259,8 +259,8 @@
 
 /* "\u2713 Saved"-toast - appears directly under the title line each time
    backend has confirmed a config_toggle/config_text/config_number
-   (gui_server.py skickar med last_saved = {path, ts}), tonar sedan bort
-   sig sjÃ¤lv utan att krÃ¤va nÃ¥gon JS-timer. */
+   (gui_server.py sends last_saved = {path, ts}), then fades itself
+   out without requiring any JS timer. */
 .config-saved-toast {
   display: inline-block;
   font-size: 11px;

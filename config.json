@@ -64,7 +64,7 @@
         "restore_from_backup": true
     },
     "TALKING": false,
-    "VOICE_MODE": true,
+    "VOICE_MODE": false,
     "tts_engine": "chatterbox",
     "chatterbox_language": "sv",
     "chatterbox_voice": "Nils_voice",
